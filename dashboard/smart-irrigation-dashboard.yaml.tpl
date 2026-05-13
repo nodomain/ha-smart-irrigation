@@ -13,23 +13,27 @@ views:
     icon: mdi:sprinkler-variant
     type: sections
     sections:
-      - title: ""
+      - title: "Status"
         cards:
           - type: tile
             entity: input_boolean.irrigation_enabled
-            name: Master
+            name: Bewässerung
             color: green
             tap_action:
               action: toggle
           - type: tile
             entity: sensor.irrigation_today_et0
-            name: "ET₀ Today"
+            name: "Verdunstung heute"
             icon: mdi:weather-sunny-alert
             color: orange
           - type: tile
             entity: binary_sensor.irrigation_rain_skip_active
-            name: Rain Skip
+            name: Regen-Pause
+            icon: mdi:weather-pouring
             color: blue
+
+      - title: "Bodenfeuchte"
+        cards:
           - type: tile
             entity: ${ZONE1_SENSOR}
             name: "${ZONE1_NAME}"
@@ -51,7 +55,7 @@ views:
             icon: mdi:liquid-spot
             color: cyan
           - type: history-graph
-            title: "Bodenfeuchte (7 Tage)"
+            title: "Letzte 7 Tage"
             hours_to_show: 168
             entities:
               - entity: ${ZONE1_SENSOR}
