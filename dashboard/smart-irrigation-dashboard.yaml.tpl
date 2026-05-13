@@ -67,7 +67,7 @@ views:
               - entity: ${ZONE4_SENSOR}
                 name: "${ZONE4_NAME}"
 
-      - title: "Steuerung"
+      - title: "Bewässerungsbedarf"
         cards:
           - type: entities
             entities:
