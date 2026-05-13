@@ -336,7 +336,7 @@ input_number:
     unit_of_measurement: "%"
     icon: mdi:water-check
     mode: slider
-    initial: 50
+    initial: 45
 
   irrigation_sensor_dry_threshold:
     name: "Sensor dry threshold (emergency trigger)"
@@ -346,7 +346,7 @@ input_number:
     unit_of_measurement: "%"
     icon: mdi:water-alert
     mode: slider
-    initial: 15
+    initial: 25
 
   irrigation_sensor_calibration_weight:
     name: "Sensor calibration weight"

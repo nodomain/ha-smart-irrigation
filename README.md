@@ -300,24 +300,35 @@ The included dashboard uses the modern **sections** view type with two views:
 
 ### Sensor Threshold Tuning
 
-The Ecowitt soil moisture sensors report **volumetric water content** as a percentage. The meaning varies by soil type:
+The Ecowitt soil moisture sensors (WH51) use a **capacitive/dielectric measurement**. They don't measure actual volumetric water content — they measure how much the soil's electrical properties change between dry air (0%) and submerged in water (100%). Values are relative, not absolute.
 
-| Soil Type | Dry | Moist | Wet | Saturated |
-|-----------|-----|-------|-----|-----------|
-| Sandy | < 10% | 10–20% | 20–35% | > 35% |
-| Loamy | < 15% | 15–30% | 30–45% | > 45% |
-| Clay | < 20% | 20–35% | 35–50% | > 50% |
-| Potting mix | < 15% | 15–35% | 35–55% | > 55% |
+**Typical reading ranges:**
+| Condition | Sensor Reading |
+|-----------|---------------|
+| Freshly watered | 55–70% |
+| Moist, no action needed | 40–55% |
+| Getting dry, water soon | 30–40% |
+| Dry, plants stressed | 20–30% |
+| Critically dry | < 20% |
 
-**Recommended starting points:**
-- **Wet threshold** (50%): Lower to 40% for sandy soil, raise to 60% for clay
-- **Dry threshold** (15%): Most plants stress below 15%. Raise to 20% for sensitive plants.
-- **Calibration weight** (0.3): Start here. Increase to 0.4–0.5 if model drifts a lot. Decrease to 0.1–0.2 if sensors are in non-representative spots.
+**Default thresholds (tuned for these sensors):**
+- **Wet threshold (45%)**: Skip irrigation — soil still has enough moisture from recent watering
+- **Dry threshold (25%)**: Emergency trigger — most plants are stressed at this level
+- **Calibration weight (0.3)**: 30% sensor influence on the daily model correction
+
+**Adjustment by soil type:**
+| Soil Type | Wet Threshold | Dry Threshold | Notes |
+|-----------|--------------|---------------|-------|
+| Sandy | 40% | 20% | Drains fast, lower readings overall |
+| Loamy (default) | 45% | 25% | Good baseline |
+| Clay | 50% | 30% | Retains water, higher readings |
+| Potting mix | 45% | 25% | Similar to loam |
 
 **After 1–2 weeks of operation**, check:
 1. Does the sensor veto prevent necessary watering? → Lower wet threshold
 2. Does emergency trigger too often? → Lower dry threshold
 3. Do model and sensor diverge significantly? → Increase calibration weight
+4. Optional: calibrate sensors in Ecowitt app (dry reading → 0%, wet reading → 100%)
 
 ### Crop Coefficient (Kc) Reference
 
