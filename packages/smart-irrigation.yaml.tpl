@@ -13,6 +13,10 @@
 #   - Sequential zone execution with pressure recovery delay
 #   - Safety timeouts: valves always turn off, even on automation errors
 #   - iPhone push notifications for daily summaries and skip events
+#   - Soil moisture sensor fusion: real sensor data overrides/calibrates model
+#   - Sensor veto: skip irrigation when soil is still moist enough
+#   - Sensor emergency: force irrigation when soil is critically dry
+#   - Daily sensor calibration: correct model drift with real measurements
 #
 # Zones:
 #   1. ${ZONE1_NAME} — ${ZONE1_SWITCH}
@@ -21,6 +25,7 @@
 #   4. ${ZONE4_NAME} — ${ZONE4_SWITCH}
 #
 # Weather: KachelmannWetter integration
+# Sensors: Ecowitt GW3000A soil moisture (${ZONE1_SENSOR}, ${ZONE2_SENSOR}, ${ZONE3_SENSOR}, ${ZONE4_SENSOR})
 # Notifications: notify.mobile_app_${IPHONE_DEVICE}
 ###############################################################################
 
@@ -320,6 +325,38 @@ input_number:
     mode: slider
     initial: 5
 
+  # ---------------------------------------------------------------------------
+  # Soil moisture sensor thresholds (Ecowitt)
+  # ---------------------------------------------------------------------------
+  irrigation_sensor_wet_threshold:
+    name: "Sensor wet threshold (skip irrigation)"
+    min: 30
+    max: 80
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:water-check
+    mode: slider
+    initial: 50
+
+  irrigation_sensor_dry_threshold:
+    name: "Sensor dry threshold (emergency trigger)"
+    min: 5
+    max: 40
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:water-alert
+    mode: slider
+    initial: 15
+
+  irrigation_sensor_calibration_weight:
+    name: "Sensor calibration weight"
+    min: 0
+    max: 0.5
+    step: 0.05
+    icon: mdi:scale-balance
+    mode: slider
+    initial: 0.3
+
 
 # =============================================================================
 # INPUT DATETIME — Last watered timestamps for each zone
@@ -429,6 +466,58 @@ template:
           {{ (et0 * kc) | round(1) }}
 
       # -----------------------------------------------------------------------
+      # Per-zone soil moisture sensor status (real vs. model comparison)
+      # Shows the real sensor reading alongside the model estimate.
+      # -----------------------------------------------------------------------
+      - name: "Zone 1 soil moisture sensor"
+        unique_id: irrigation_zone_1_soil_sensor
+        unit_of_measurement: "%"
+        device_class: moisture
+        state_class: measurement
+        icon: mdi:liquid-spot
+        state: >-
+          {{ states('${ZONE1_SENSOR}') | float(0) }}
+        attributes:
+          model_estimate: "{{ states('sensor.zone_1_balance_percent') }}"
+          sensor_available: "{{ states('${ZONE1_SENSOR}') not in ['unavailable', 'unknown'] }}"
+
+      - name: "Zone 2 soil moisture sensor"
+        unique_id: irrigation_zone_2_soil_sensor
+        unit_of_measurement: "%"
+        device_class: moisture
+        state_class: measurement
+        icon: mdi:liquid-spot
+        state: >-
+          {{ states('${ZONE2_SENSOR}') | float(0) }}
+        attributes:
+          model_estimate: "{{ states('sensor.zone_2_balance_percent') }}"
+          sensor_available: "{{ states('${ZONE2_SENSOR}') not in ['unavailable', 'unknown'] }}"
+
+      - name: "Zone 3 soil moisture sensor"
+        unique_id: irrigation_zone_3_soil_sensor
+        unit_of_measurement: "%"
+        device_class: moisture
+        state_class: measurement
+        icon: mdi:liquid-spot
+        state: >-
+          {{ states('${ZONE3_SENSOR}') | float(0) }}
+        attributes:
+          model_estimate: "{{ states('sensor.zone_3_balance_percent') }}"
+          sensor_available: "{{ states('${ZONE3_SENSOR}') not in ['unavailable', 'unknown'] }}"
+
+      - name: "Zone 4 soil moisture sensor"
+        unique_id: irrigation_zone_4_soil_sensor
+        unit_of_measurement: "%"
+        device_class: moisture
+        state_class: measurement
+        icon: mdi:liquid-spot
+        state: >-
+          {{ states('${ZONE4_SENSOR}') | float(0) }}
+        attributes:
+          model_estimate: "{{ states('sensor.zone_4_balance_percent') }}"
+          sensor_available: "{{ states('${ZONE4_SENSOR}') not in ['unavailable', 'unknown'] }}"
+
+      # -----------------------------------------------------------------------
       # Per-zone water balance percentage (for gauges)
       # -----------------------------------------------------------------------
       - name: "Zone 1 balance percent"
@@ -514,7 +603,7 @@ template:
         unit_of_measurement: "min"
         icon: mdi:timer-sand
         state: >-
-          {% set deficit = states('sensor.irrigation_zone_1_deficit') | float(0) %}
+          {% set deficit = states('sensor.zone_1_deficit') | float(0) %}
           {% set per_mm = states('input_number.irrigation_zone_1_duration_per_mm') | float(3) %}
           {% set max_dur = states('input_number.irrigation_max_duration') | float(30) %}
           {% set duration = (deficit * per_mm) | round(0) %}
@@ -525,7 +614,7 @@ template:
         unit_of_measurement: "min"
         icon: mdi:timer-sand
         state: >-
-          {% set deficit = states('sensor.irrigation_zone_2_deficit') | float(0) %}
+          {% set deficit = states('sensor.zone_2_deficit') | float(0) %}
           {% set per_mm = states('input_number.irrigation_zone_2_duration_per_mm') | float(3) %}
           {% set max_dur = states('input_number.irrigation_max_duration') | float(30) %}
           {% set duration = (deficit * per_mm) | round(0) %}
@@ -536,7 +625,7 @@ template:
         unit_of_measurement: "min"
         icon: mdi:timer-sand
         state: >-
-          {% set deficit = states('sensor.irrigation_zone_3_deficit') | float(0) %}
+          {% set deficit = states('sensor.zone_3_deficit') | float(0) %}
           {% set per_mm = states('input_number.irrigation_zone_3_duration_per_mm') | float(3) %}
           {% set max_dur = states('input_number.irrigation_max_duration') | float(30) %}
           {% set duration = (deficit * per_mm) | round(0) %}
@@ -547,7 +636,7 @@ template:
         unit_of_measurement: "min"
         icon: mdi:timer-sand
         state: >-
-          {% set deficit = states('sensor.irrigation_zone_4_deficit') | float(0) %}
+          {% set deficit = states('sensor.zone_4_deficit') | float(0) %}
           {% set per_mm = states('input_number.irrigation_zone_4_duration_per_mm') | float(3) %}
           {% set max_dur = states('input_number.irrigation_max_duration') | float(30) %}
           {% set duration = (deficit * per_mm) | round(0) %}
@@ -590,7 +679,17 @@ template:
           {% set capacity = states('input_number.irrigation_zone_1_capacity') | float(10) %}
           {% set trigger_pct = states('input_number.irrigation_zone_1_trigger') | float(30) %}
           {% set threshold = capacity * (trigger_pct / 100) %}
-          {{ balance < threshold }}
+          {% set model_needs = balance < threshold %}
+          {% set sensor_val = states('${ZONE1_SENSOR}') %}
+          {% set sensor_ok = sensor_val not in ['unavailable', 'unknown'] %}
+          {% set wet_th = states('input_number.irrigation_sensor_wet_threshold') | float(50) %}
+          {% set dry_th = states('input_number.irrigation_sensor_dry_threshold') | float(15) %}
+          {% if sensor_ok %}
+            {% set sv = sensor_val | float(0) %}
+            {{ (model_needs and sv < wet_th) or sv < dry_th }}
+          {% else %}
+            {{ model_needs }}
+          {% endif %}
 
       - name: "Zone 2 needs water"
         unique_id: irrigation_zone_2_needs_water
@@ -601,7 +700,17 @@ template:
           {% set capacity = states('input_number.irrigation_zone_2_capacity') | float(25) %}
           {% set trigger_pct = states('input_number.irrigation_zone_2_trigger') | float(40) %}
           {% set threshold = capacity * (trigger_pct / 100) %}
-          {{ balance < threshold }}
+          {% set model_needs = balance < threshold %}
+          {% set sensor_val = states('${ZONE2_SENSOR}') %}
+          {% set sensor_ok = sensor_val not in ['unavailable', 'unknown'] %}
+          {% set wet_th = states('input_number.irrigation_sensor_wet_threshold') | float(50) %}
+          {% set dry_th = states('input_number.irrigation_sensor_dry_threshold') | float(15) %}
+          {% if sensor_ok %}
+            {% set sv = sensor_val | float(0) %}
+            {{ (model_needs and sv < wet_th) or sv < dry_th }}
+          {% else %}
+            {{ model_needs }}
+          {% endif %}
 
       - name: "Zone 3 needs water"
         unique_id: irrigation_zone_3_needs_water
@@ -612,7 +721,17 @@ template:
           {% set capacity = states('input_number.irrigation_zone_3_capacity') | float(25) %}
           {% set trigger_pct = states('input_number.irrigation_zone_3_trigger') | float(40) %}
           {% set threshold = capacity * (trigger_pct / 100) %}
-          {{ balance < threshold }}
+          {% set model_needs = balance < threshold %}
+          {% set sensor_val = states('${ZONE3_SENSOR}') %}
+          {% set sensor_ok = sensor_val not in ['unavailable', 'unknown'] %}
+          {% set wet_th = states('input_number.irrigation_sensor_wet_threshold') | float(50) %}
+          {% set dry_th = states('input_number.irrigation_sensor_dry_threshold') | float(15) %}
+          {% if sensor_ok %}
+            {% set sv = sensor_val | float(0) %}
+            {{ (model_needs and sv < wet_th) or sv < dry_th }}
+          {% else %}
+            {{ model_needs }}
+          {% endif %}
 
       - name: "Zone 4 needs water"
         unique_id: irrigation_zone_4_needs_water
@@ -623,7 +742,17 @@ template:
           {% set capacity = states('input_number.irrigation_zone_4_capacity') | float(15) %}
           {% set trigger_pct = states('input_number.irrigation_zone_4_trigger') | float(35) %}
           {% set threshold = capacity * (trigger_pct / 100) %}
-          {{ balance < threshold }}
+          {% set model_needs = balance < threshold %}
+          {% set sensor_val = states('${ZONE4_SENSOR}') %}
+          {% set sensor_ok = sensor_val not in ['unavailable', 'unknown'] %}
+          {% set wet_th = states('input_number.irrigation_sensor_wet_threshold') | float(50) %}
+          {% set dry_th = states('input_number.irrigation_sensor_dry_threshold') | float(15) %}
+          {% if sensor_ok %}
+            {% set sv = sensor_val | float(0) %}
+            {{ (model_needs and sv < wet_th) or sv < dry_th }}
+          {% else %}
+            {{ model_needs }}
+          {% endif %}
 
       # -----------------------------------------------------------------------
       # Global rain skip active
@@ -673,7 +802,7 @@ automation:
         data:
           value: >-
             {% set current = states('input_number.irrigation_zone_1_balance') | float(0) %}
-            {% set et = states('sensor.irrigation_zone_1_daily_et') | float(0) %}
+            {% set et = states('sensor.zone_1_daily_et') | float(0) %}
             {% set capacity = states('input_number.irrigation_zone_1_capacity') | float(10) %}
             {% set new_val = current - et + rain_today %}
             {{ [[new_val, 0] | max, capacity] | min | round(1) }}
@@ -685,7 +814,7 @@ automation:
         data:
           value: >-
             {% set current = states('input_number.irrigation_zone_2_balance') | float(0) %}
-            {% set et = states('sensor.irrigation_zone_2_daily_et') | float(0) %}
+            {% set et = states('sensor.zone_2_daily_et') | float(0) %}
             {% set capacity = states('input_number.irrigation_zone_2_capacity') | float(25) %}
             {% set new_val = current - et + rain_today %}
             {{ [[new_val, 0] | max, capacity] | min | round(1) }}
@@ -697,7 +826,7 @@ automation:
         data:
           value: >-
             {% set current = states('input_number.irrigation_zone_3_balance') | float(0) %}
-            {% set et = states('sensor.irrigation_zone_3_daily_et') | float(0) %}
+            {% set et = states('sensor.zone_3_daily_et') | float(0) %}
             {% set capacity = states('input_number.irrigation_zone_3_capacity') | float(25) %}
             {% set new_val = current - et + rain_today %}
             {{ [[new_val, 0] | max, capacity] | min | round(1) }}
@@ -709,7 +838,7 @@ automation:
         data:
           value: >-
             {% set current = states('input_number.irrigation_zone_4_balance') | float(0) %}
-            {% set et = states('sensor.irrigation_zone_4_daily_et') | float(0) %}
+            {% set et = states('sensor.zone_4_daily_et') | float(0) %}
             {% set capacity = states('input_number.irrigation_zone_4_capacity') | float(15) %}
             {% set new_val = current - et + rain_today %}
             {{ [[new_val, 0] | max, capacity] | min | round(1) }}
@@ -773,6 +902,99 @@ automation:
             {{ [[current + rain_increment, 0] | max, capacity] | min | round(1) }}
 
   # ---------------------------------------------------------------------------
+  # Sensor calibration — daily correction of model balance using real sensors.
+  # Runs 15 minutes before irrigation to allow fresh balance for decisions.
+  # Uses weighted blend: new = (1-w)*model + w*sensor_estimate
+  # ---------------------------------------------------------------------------
+  - id: irrigation_sensor_calibration
+    alias: "Irrigation: Sensor calibration"
+    description: >-
+      Daily correction of the water balance model using real soil moisture
+      sensor readings. Prevents long-term model drift by blending the
+      calculated balance with the sensor-derived estimate.
+    mode: single
+    trigger:
+      - platform: template
+        value_template: >-
+          {{ now().hour == states('input_number.irrigation_start_hour') | int(5)
+             and now().minute == 45 }}
+    condition:
+      - condition: state
+        entity_id: input_boolean.irrigation_enabled
+        state: "on"
+    action:
+      - variables:
+          weight: "{{ states('input_number.irrigation_sensor_calibration_weight') | float(0.3) }}"
+
+      # --- Zone 1 calibration ---
+      - if:
+          - condition: template
+            value_template: "{{ states('${ZONE1_SENSOR}') not in ['unavailable', 'unknown'] }}"
+        then:
+          - service: input_number.set_value
+            target:
+              entity_id: input_number.irrigation_zone_1_balance
+            data:
+              value: >-
+                {% set capacity = states('input_number.irrigation_zone_1_capacity') | float(10) %}
+                {% set model_bal = states('input_number.irrigation_zone_1_balance') | float(0) %}
+                {% set sensor_pct = states('${ZONE1_SENSOR}') | float(0) %}
+                {% set sensor_mm = (sensor_pct / 100) * capacity %}
+                {% set blended = (1 - weight) * model_bal + weight * sensor_mm %}
+                {{ [[blended, 0] | max, capacity] | min | round(1) }}
+
+      # --- Zone 2 calibration ---
+      - if:
+          - condition: template
+            value_template: "{{ states('${ZONE2_SENSOR}') not in ['unavailable', 'unknown'] }}"
+        then:
+          - service: input_number.set_value
+            target:
+              entity_id: input_number.irrigation_zone_2_balance
+            data:
+              value: >-
+                {% set capacity = states('input_number.irrigation_zone_2_capacity') | float(25) %}
+                {% set model_bal = states('input_number.irrigation_zone_2_balance') | float(0) %}
+                {% set sensor_pct = states('${ZONE2_SENSOR}') | float(0) %}
+                {% set sensor_mm = (sensor_pct / 100) * capacity %}
+                {% set blended = (1 - weight) * model_bal + weight * sensor_mm %}
+                {{ [[blended, 0] | max, capacity] | min | round(1) }}
+
+      # --- Zone 3 calibration ---
+      - if:
+          - condition: template
+            value_template: "{{ states('${ZONE3_SENSOR}') not in ['unavailable', 'unknown'] }}"
+        then:
+          - service: input_number.set_value
+            target:
+              entity_id: input_number.irrigation_zone_3_balance
+            data:
+              value: >-
+                {% set capacity = states('input_number.irrigation_zone_3_capacity') | float(25) %}
+                {% set model_bal = states('input_number.irrigation_zone_3_balance') | float(0) %}
+                {% set sensor_pct = states('${ZONE3_SENSOR}') | float(0) %}
+                {% set sensor_mm = (sensor_pct / 100) * capacity %}
+                {% set blended = (1 - weight) * model_bal + weight * sensor_mm %}
+                {{ [[blended, 0] | max, capacity] | min | round(1) }}
+
+      # --- Zone 4 calibration ---
+      - if:
+          - condition: template
+            value_template: "{{ states('${ZONE4_SENSOR}') not in ['unavailable', 'unknown'] }}"
+        then:
+          - service: input_number.set_value
+            target:
+              entity_id: input_number.irrigation_zone_4_balance
+            data:
+              value: >-
+                {% set capacity = states('input_number.irrigation_zone_4_capacity') | float(15) %}
+                {% set model_bal = states('input_number.irrigation_zone_4_balance') | float(0) %}
+                {% set sensor_pct = states('${ZONE4_SENSOR}') | float(0) %}
+                {% set sensor_mm = (sensor_pct / 100) * capacity %}
+                {% set blended = (1 - weight) * model_bal + weight * sensor_mm %}
+                {{ [[blended, 0] | max, capacity] | min | round(1) }}
+
+  # ---------------------------------------------------------------------------
   # Morning irrigation scheduler — the main event
   # Runs each zone sequentially if it needs water and conditions allow.
   # ---------------------------------------------------------------------------
@@ -819,12 +1041,12 @@ automation:
             entity_id: input_boolean.irrigation_zone_1_enabled
             state: "on"
           - condition: state
-            entity_id: binary_sensor.irrigation_zone_1_needs_water
+            entity_id: binary_sensor.zone_1_needs_water
             state: "on"
         then:
           - variables:
               zone1_duration: >-
-                {{ states('sensor.irrigation_zone_1_recommended_duration') | int(0) }}
+                {{ states('sensor.zone_1_recommended_duration') | int(0) }}
           - if:
               - condition: template
                 value_template: "{{ zone1_duration > 0 }}"
@@ -865,12 +1087,12 @@ automation:
             entity_id: input_boolean.irrigation_zone_2_enabled
             state: "on"
           - condition: state
-            entity_id: binary_sensor.irrigation_zone_2_needs_water
+            entity_id: binary_sensor.zone_2_needs_water
             state: "on"
         then:
           - variables:
               zone2_duration: >-
-                {{ states('sensor.irrigation_zone_2_recommended_duration') | int(0) }}
+                {{ states('sensor.zone_2_recommended_duration') | int(0) }}
           - if:
               - condition: template
                 value_template: "{{ zone2_duration > 0 }}"
@@ -907,12 +1129,12 @@ automation:
             entity_id: input_boolean.irrigation_zone_3_enabled
             state: "on"
           - condition: state
-            entity_id: binary_sensor.irrigation_zone_3_needs_water
+            entity_id: binary_sensor.zone_3_needs_water
             state: "on"
         then:
           - variables:
               zone3_duration: >-
-                {{ states('sensor.irrigation_zone_3_recommended_duration') | int(0) }}
+                {{ states('sensor.zone_3_recommended_duration') | int(0) }}
           - if:
               - condition: template
                 value_template: "{{ zone3_duration > 0 }}"
@@ -949,12 +1171,12 @@ automation:
             entity_id: input_boolean.irrigation_zone_4_enabled
             state: "on"
           - condition: state
-            entity_id: binary_sensor.irrigation_zone_4_needs_water
+            entity_id: binary_sensor.zone_4_needs_water
             state: "on"
         then:
           - variables:
               zone4_duration: >-
-                {{ states('sensor.irrigation_zone_4_recommended_duration') | int(0) }}
+                {{ states('sensor.zone_4_recommended_duration') | int(0) }}
           - if:
               - condition: template
                 value_template: "{{ zone4_duration > 0 }}"
@@ -988,21 +1210,34 @@ automation:
         data:
           title: "🌿 Irrigation complete"
           message: >-
-            {% set z1 = is_state('binary_sensor.irrigation_zone_1_needs_water', 'on') and is_state('input_boolean.irrigation_zone_1_enabled', 'on') %}
-            {% set z2 = is_state('binary_sensor.irrigation_zone_2_needs_water', 'on') and is_state('input_boolean.irrigation_zone_2_enabled', 'on') %}
-            {% set z3 = is_state('binary_sensor.irrigation_zone_3_needs_water', 'on') and is_state('input_boolean.irrigation_zone_3_enabled', 'on') %}
-            {% set z4 = is_state('binary_sensor.irrigation_zone_4_needs_water', 'on') and is_state('input_boolean.irrigation_zone_4_enabled', 'on') %}
+            {% set z1 = is_state('binary_sensor.zone_1_needs_water', 'on') and is_state('input_boolean.irrigation_zone_1_enabled', 'on') %}
+            {% set z2 = is_state('binary_sensor.zone_2_needs_water', 'on') and is_state('input_boolean.irrigation_zone_2_enabled', 'on') %}
+            {% set z3 = is_state('binary_sensor.zone_3_needs_water', 'on') and is_state('input_boolean.irrigation_zone_3_enabled', 'on') %}
+            {% set z4 = is_state('binary_sensor.zone_4_needs_water', 'on') and is_state('input_boolean.irrigation_zone_4_enabled', 'on') %}
             {% set watered = [] %}
-            {% if z1 %}{% set watered = watered + ['${ZONE1_NAME} (' + states('sensor.irrigation_zone_1_recommended_duration') + 'min)'] %}{% endif %}
-            {% if z2 %}{% set watered = watered + ['${ZONE2_NAME} (' + states('sensor.irrigation_zone_2_recommended_duration') + 'min)'] %}{% endif %}
-            {% if z3 %}{% set watered = watered + ['${ZONE3_NAME} (' + states('sensor.irrigation_zone_3_recommended_duration') + 'min)'] %}{% endif %}
-            {% if z4 %}{% set watered = watered + ['${ZONE4_NAME} (' + states('sensor.irrigation_zone_4_recommended_duration') + 'min)'] %}{% endif %}
+            {% if z1 %}{% set watered = watered + ['${ZONE1_NAME} (' + states('sensor.zone_1_recommended_duration') + 'min, 🌡' + states('${ZONE1_SENSOR}') + '%)'] %}{% endif %}
+            {% if z2 %}{% set watered = watered + ['${ZONE2_NAME} (' + states('sensor.zone_2_recommended_duration') + 'min, 🌡' + states('${ZONE2_SENSOR}') + '%)'] %}{% endif %}
+            {% if z3 %}{% set watered = watered + ['${ZONE3_NAME} (' + states('sensor.zone_3_recommended_duration') + 'min, 🌡' + states('${ZONE3_SENSOR}') + '%)'] %}{% endif %}
+            {% if z4 %}{% set watered = watered + ['${ZONE4_NAME} (' + states('sensor.zone_4_recommended_duration') + 'min, 🌡' + states('${ZONE4_SENSOR}') + '%)'] %}{% endif %}
+            {% set skipped = [] %}
+            {% set s1 = states('${ZONE1_SENSOR}') | float(0) %}
+            {% set s2 = states('${ZONE2_SENSOR}') | float(0) %}
+            {% set s3 = states('${ZONE3_SENSOR}') | float(0) %}
+            {% set s4 = states('${ZONE4_SENSOR}') | float(0) %}
+            {% set wet = states('input_number.irrigation_sensor_wet_threshold') | float(50) %}
+            {% if not z1 and is_state('input_boolean.irrigation_zone_1_enabled', 'on') and s1 >= wet %}{% set skipped = skipped + ['${ZONE1_NAME} (🌡' + s1|string + '% ≥ ' + wet|int|string + '%)'] %}{% endif %}
+            {% if not z2 and is_state('input_boolean.irrigation_zone_2_enabled', 'on') and s2 >= wet %}{% set skipped = skipped + ['${ZONE2_NAME} (🌡' + s2|string + '% ≥ ' + wet|int|string + '%)'] %}{% endif %}
+            {% if not z3 and is_state('input_boolean.irrigation_zone_3_enabled', 'on') and s3 >= wet %}{% set skipped = skipped + ['${ZONE3_NAME} (🌡' + s3|string + '% ≥ ' + wet|int|string + '%)'] %}{% endif %}
+            {% if not z4 and is_state('input_boolean.irrigation_zone_4_enabled', 'on') and s4 >= wet %}{% set skipped = skipped + ['${ZONE4_NAME} (🌡' + s4|string + '% ≥ ' + wet|int|string + '%)'] %}{% endif %}
             {% if watered | length > 0 %}
-              Watered: {{ watered | join(', ') }}
+              💧 Watered: {{ watered | join(', ') }}
             {% else %}
-              All zones have sufficient moisture. No watering needed.
+              All zones have sufficient moisture.
             {% endif %}
-            ET₀ today: {{ states('sensor.irrigation_today_et0') }}mm
+            {% if skipped | length > 0 %}
+              ⏭️ Sensor skip: {{ skipped | join(', ') }}
+            {% endif %}
+            ET₀: {{ states('sensor.irrigation_today_et0') }}mm
           data:
             tag: irrigation-summary
             group: irrigation
@@ -1250,17 +1485,112 @@ automation:
             {% set z2_cap = states('input_number.irrigation_zone_2_capacity') | float(25) %}
             {% set z3_cap = states('input_number.irrigation_zone_3_capacity') | float(25) %}
             {% set z4_cap = states('input_number.irrigation_zone_4_capacity') | float(15) %}
-            Zone balances:
-            - ${ZONE1_NAME}: {{ ((z1_bal/z1_cap)*100)|int }}%
-            - ${ZONE2_NAME}: {{ ((z2_bal/z2_cap)*100)|int }}%
-            - ${ZONE3_NAME}: {{ ((z3_bal/z3_cap)*100)|int }}%
-            - ${ZONE4_NAME}: {{ ((z4_bal/z4_cap)*100)|int }}%
+            Zone status (model / sensor):
+            - ${ZONE1_NAME}: {{ ((z1_bal/z1_cap)*100)|int }}% / 🌡{{ states('${ZONE1_SENSOR}') }}%
+            - ${ZONE2_NAME}: {{ ((z2_bal/z2_cap)*100)|int }}% / 🌡{{ states('${ZONE2_SENSOR}') }}%
+            - ${ZONE3_NAME}: {{ ((z3_bal/z3_cap)*100)|int }}% / 🌡{{ states('${ZONE3_SENSOR}') }}%
+            - ${ZONE4_NAME}: {{ ((z4_bal/z4_cap)*100)|int }}% / 🌡{{ states('${ZONE4_SENSOR}') }}%
 
             Current ET0: {{ states('sensor.irrigation_today_et0') }}mm/day
             Rain skip: {{ 'Active' if is_state('binary_sensor.irrigation_rain_skip_active', 'on') else 'Inactive' }}
           data:
             tag: irrigation-weekly
             group: irrigation
+
+  # ---------------------------------------------------------------------------
+  # SENSOR EMERGENCY - immediate irrigation when soil is critically dry
+  # Only triggers during daytime (8:00-20:00) to avoid night watering.
+  # Debounce: won't re-trigger within 4 hours per zone.
+  # ---------------------------------------------------------------------------
+  - id: irrigation_sensor_emergency
+    alias: "Irrigation: Sensor emergency (critically dry)"
+    description: >-
+      Emergency irrigation triggered by critically low soil moisture sensor
+      readings. Overrides the model — waters immediately when a zone is
+      dangerously dry regardless of the calculated balance.
+    mode: queued
+    max: 4
+    trigger:
+      - platform: numeric_state
+        entity_id: ${ZONE1_SENSOR}
+        below: input_number.irrigation_sensor_dry_threshold
+        id: zone1
+        for:
+          minutes: 30
+      - platform: numeric_state
+        entity_id: ${ZONE2_SENSOR}
+        below: input_number.irrigation_sensor_dry_threshold
+        id: zone2
+        for:
+          minutes: 30
+      - platform: numeric_state
+        entity_id: ${ZONE3_SENSOR}
+        below: input_number.irrigation_sensor_dry_threshold
+        id: zone3
+        for:
+          minutes: 30
+      - platform: numeric_state
+        entity_id: ${ZONE4_SENSOR}
+        below: input_number.irrigation_sensor_dry_threshold
+        id: zone4
+        for:
+          minutes: 30
+    condition:
+      - condition: state
+        entity_id: input_boolean.irrigation_enabled
+        state: "on"
+      - condition: template
+        value_template: "{{ 8 <= now().hour < 20 }}"
+    action:
+      - variables:
+          zone_name: >-
+            {% if trigger.id == 'zone1' %}${ZONE1_NAME}
+            {% elif trigger.id == 'zone2' %}${ZONE2_NAME}
+            {% elif trigger.id == 'zone3' %}${ZONE3_NAME}
+            {% else %}${ZONE4_NAME}{% endif %}
+          zone_switch: >-
+            {% if trigger.id == 'zone1' %}${ZONE1_SWITCH}
+            {% elif trigger.id == 'zone2' %}${ZONE2_SWITCH}
+            {% elif trigger.id == 'zone3' %}${ZONE3_SWITCH}
+            {% else %}${ZONE4_SWITCH}{% endif %}
+          zone_balance: >-
+            {% if trigger.id == 'zone1' %}input_number.irrigation_zone_1_balance
+            {% elif trigger.id == 'zone2' %}input_number.irrigation_zone_2_balance
+            {% elif trigger.id == 'zone3' %}input_number.irrigation_zone_3_balance
+            {% else %}input_number.irrigation_zone_4_balance{% endif %}
+          zone_capacity: >-
+            {% if trigger.id == 'zone1' %}{{ states('input_number.irrigation_zone_1_capacity') | float(10) }}
+            {% elif trigger.id == 'zone2' %}{{ states('input_number.irrigation_zone_2_capacity') | float(25) }}
+            {% elif trigger.id == 'zone3' %}{{ states('input_number.irrigation_zone_3_capacity') | float(25) }}
+            {% else %}{{ states('input_number.irrigation_zone_4_capacity') | float(15) }}{% endif %}
+          emergency_duration: 10
+      - service: notify.mobile_app_${IPHONE_DEVICE}
+        data:
+          title: "🚨 Emergency irrigation"
+          message: >-
+            {{ zone_name }} sensor reads {{ trigger.to_state.state }}% — critically dry!
+            Running emergency watering for {{ emergency_duration }} minutes.
+          data:
+            tag: irrigation-emergency
+            group: irrigation
+      - service: switch.turn_on
+        target:
+          entity_id: "{{ zone_switch }}"
+      - delay:
+          minutes: "{{ emergency_duration }}"
+      - service: switch.turn_off
+        target:
+          entity_id: "{{ zone_switch }}"
+      - service: input_number.set_value
+        target:
+          entity_id: "{{ zone_balance }}"
+        data:
+          value: >-
+            {% set current = states(zone_balance) | float(0) %}
+            {% set per_mm_entity = 'input_number.irrigation_' + trigger.id + '_duration_per_mm' %}
+            {% set per_mm = states(per_mm_entity) | float(3) %}
+            {% set added = emergency_duration / per_mm %}
+            {{ [[current + added, 0] | max, zone_capacity | float] | min | round(1) }}
 
 
 # =============================================================================
@@ -1275,7 +1605,7 @@ script:
     sequence:
       - variables:
           duration: >-
-            {{ states('sensor.irrigation_zone_1_recommended_duration') | int(5) }}
+            {{ states('sensor.zone_1_recommended_duration') | int(5) }}
       - service: switch.turn_on
         target:
           entity_id: ${ZONE1_SWITCH}
@@ -1308,7 +1638,7 @@ script:
     sequence:
       - variables:
           duration: >-
-            {{ states('sensor.irrigation_zone_2_recommended_duration') | int(5) }}
+            {{ states('sensor.zone_2_recommended_duration') | int(5) }}
       - service: switch.turn_on
         target:
           entity_id: ${ZONE2_SWITCH}
@@ -1341,7 +1671,7 @@ script:
     sequence:
       - variables:
           duration: >-
-            {{ states('sensor.irrigation_zone_3_recommended_duration') | int(5) }}
+            {{ states('sensor.zone_3_recommended_duration') | int(5) }}
       - service: switch.turn_on
         target:
           entity_id: ${ZONE3_SWITCH}
@@ -1374,7 +1704,7 @@ script:
     sequence:
       - variables:
           duration: >-
-            {{ states('sensor.irrigation_zone_4_recommended_duration') | int(5) }}
+            {{ states('sensor.zone_4_recommended_duration') | int(5) }}
       - service: switch.turn_on
         target:
           entity_id: ${ZONE4_SWITCH}

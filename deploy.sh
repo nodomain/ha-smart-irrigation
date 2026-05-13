@@ -82,7 +82,7 @@ source "$ENV_FILE"
 set +a
 
 # --- Validate required vars ---
-for var in ZONE1_SWITCH ZONE2_SWITCH ZONE3_SWITCH ZONE4_SWITCH IPHONE_DEVICE ZONE1_DEVICE_ID ZONE4_DEVICE_ID GATEWAY_CONNECTION_ENTITY ZONE1_CONNECTION_ENTITY ZONE4_CONNECTION_ENTITY; do
+for var in ZONE1_SWITCH ZONE2_SWITCH ZONE3_SWITCH ZONE4_SWITCH IPHONE_DEVICE ZONE1_DEVICE_ID ZONE4_DEVICE_ID GATEWAY_CONNECTION_ENTITY ZONE1_CONNECTION_ENTITY ZONE4_CONNECTION_ENTITY ZONE1_SENSOR ZONE2_SENSOR ZONE3_SENSOR ZONE4_SENSOR; do
   if [[ -z "${!var:-}" ]]; then
     echo "❌ Missing required variable: $var (check your .env file)" >&2
     exit 1
@@ -130,10 +130,10 @@ ensure_mounted() {
 ensure_mounted
 
 echo "🚀 Deploying to $TARGET ..."
-echo "   ZONE1: ${ZONE1_NAME:-Zone 1} → $ZONE1_SWITCH"
-echo "   ZONE2: ${ZONE2_NAME:-Zone 2} → $ZONE2_SWITCH"
-echo "   ZONE3: ${ZONE3_NAME:-Zone 3} → $ZONE3_SWITCH"
-echo "   ZONE4: ${ZONE4_NAME:-Zone 4} → $ZONE4_SWITCH"
+echo "   ZONE1: ${ZONE1_NAME:-Zone 1} → $ZONE1_SWITCH (sensor: $ZONE1_SENSOR)"
+echo "   ZONE2: ${ZONE2_NAME:-Zone 2} → $ZONE2_SWITCH (sensor: $ZONE2_SENSOR)"
+echo "   ZONE3: ${ZONE3_NAME:-Zone 3} → $ZONE3_SWITCH (sensor: $ZONE3_SENSOR)"
+echo "   ZONE4: ${ZONE4_NAME:-Zone 4} → $ZONE4_SWITCH (sensor: $ZONE4_SENSOR)"
 echo "   IPHONE: $IPHONE_DEVICE"
 
 # --- Ensure output subfolder exists ---

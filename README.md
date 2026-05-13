@@ -1,10 +1,14 @@
-# 🌿 Smart Irrigation — ET-Based Scheduling for Home Assistant
+# 🌿 Smart Irrigation — ET + Sensor Fusion for Home Assistant
 
-Intelligent irrigation control using evapotranspiration (ET) calculations with KachelmannWetter weather data and DIIVOO MQTT valves. Waters only when plants actually need it, skips when rain is expected.
+Intelligent irrigation control combining **evapotranspiration (ET) modeling** with **real soil moisture sensors** (Ecowitt) for truly adaptive watering. Uses KachelmannWetter weather data and DIIVOO MQTT valves.
 
 ## Features
 
 - **ET₀-based water balance** — calculates daily evapotranspiration from solar radiation, temperature, and wind
+- **Soil moisture sensor fusion** — real Ecowitt sensor data overrides and calibrates the model
+- **Sensor veto** — skips irrigation when soil is still moist enough (even if model says "dry")
+- **Sensor emergency** — forces immediate irrigation when soil is critically dry (even if model says "OK")
+- **Daily sensor calibration** — blends model with real measurements to prevent long-term drift
 - **Per-zone crop coefficients (Kc)** — each zone has tailored water demand based on plant type
 - **Rain credit system** — actual rainfall is automatically credited to soil moisture balance
 - **Forecast skip** — skips irrigation when significant rain is expected (configurable threshold)
@@ -14,8 +18,8 @@ Intelligent irrigation control using evapotranspiration (ET) calculations with K
 - **Safety shutoff** — valves auto-close after 35 minutes regardless of automation state
 - **Startup safety** — all valves forced off on Home Assistant restart
 - **Persistent water balance** — uses `input_number` to survive HA restarts
-- **iPhone notifications** — daily summaries, skip reasons, and safety alerts
-- **Dashboard included** — modern sections-based UI with gauges, history, and manual controls
+- **iPhone notifications** — daily summaries with sensor values, skip reasons, and safety alerts
+- **Dashboard included** — modern sections-based UI with gauges, sensor tiles, history graphs, and manual controls
 - **Template-based deployment** — `envsubst` for easy entity customization
 
 ## Requirements
@@ -23,6 +27,7 @@ Intelligent irrigation control using evapotranspiration (ET) calculations with K
 - Home Assistant 2024.1+
 - [KachelmannWetter integration](https://github.com/meteotool/home-assistant-kachelmannwetter) (HACS)
 - DIIVOO irrigation valves connected via MQTT (via [hassio-diivoo2mqtt](https://github.com/Technerd-SG/hassio-diivoo2mqtt))
+- Ecowitt GW3000A gateway with soil moisture sensors (via [Ecowitt integration](https://www.home-assistant.io/integrations/ecowitt/))
 - macOS for `deploy.sh` auto-mount (optional; manual copy works on any OS)
 
 ## Quick Start
@@ -53,6 +58,30 @@ Or, if `HA_URL` and `HA_TOKEN` are set in `.env`, the dashboard is pushed automa
 
 ## How It Works
 
+### The Hybrid Approach: Model + Sensor Fusion
+
+The system combines two signals for robust irrigation decisions:
+
+1. **ET₀ Water Balance Model** (predictive) — estimates soil moisture from weather data
+2. **Real Soil Moisture Sensors** (ground truth) — Ecowitt probes in the ground
+
+Neither alone is perfect: the model can drift over time, and sensors can be noisy or positioned in non-representative spots. Together they provide reliable, adaptive irrigation.
+
+### Decision Logic
+
+```
+IRRIGATE when:
+  (Model says "dry" AND Sensor < wet_threshold)    → normal watering
+  OR (Sensor < dry_threshold)                       → emergency override
+
+DO NOT IRRIGATE when:
+  Sensor ≥ wet_threshold                            → veto (soil is moist enough)
+  (even if model says "dry")
+
+FALLBACK when sensor unavailable:
+  Use model-only decision                           → graceful degradation
+```
+
 ### The ET Model
 
 The system uses a simplified **water balance** approach inspired by FAO-56 methodology:
@@ -68,7 +97,7 @@ Where:
 
 #### Reference ET₀ Calculation
 
-ET₀ (reference evapotranspiration) represents how much water a reference grass surface would lose on a given day. The system uses a **simplified radiation-based formula** with KachelmannWetter data:
+ET₀ represents how much water a reference grass surface would lose on a given day:
 
 ```
 IF solar radiation available:
@@ -80,24 +109,24 @@ ELSE (fallback to sunshine hours):
 
 This produces realistic values of **0–8 mm/day** for Central Europe.
 
-#### Daily Cycle
+### Daily Cycle
 
-1. **Throughout the day**: Rain credits are added to all zones in real-time
-2. **At 23:55**: Daily ET is subtracted from each zone's balance
-3. **At 05:00** (configurable): The morning scheduler checks each zone and waters those below their trigger threshold
-4. **At 20:00** (configurable): If ET₀ exceeded the evening threshold, high-demand zones (Kc ≥ 0.9) get a second shorter watering to prevent overnight wilting
+1. **04:45** — Sensor calibration: model balance is blended with real sensor readings
+2. **05:00** (configurable) — Morning scheduler: checks each zone and waters those that need it
+3. **Throughout the day** — Rain credits added to all zones in real-time
+4. **20:00** (configurable) — Evening top-up for high-demand zones on hot days (ET₀ > threshold)
+5. **23:55** — Daily ET deducted from each zone's balance
+6. **Anytime** — Sensor emergency: immediate watering if any sensor drops critically low
 
-#### Irrigation Decision
+### Sensor Calibration
 
-A zone gets watered when:
+Once daily (15 min before irrigation), the model balance is corrected using real sensor readings:
+
 ```
-balance < capacity × (trigger_percent / 100)
+new_balance = (1 − weight) × model_balance + weight × sensor_estimate
 ```
 
-The duration is calculated as:
-```
-duration = min(deficit × minutes_per_mm, max_duration)
-```
+Where `sensor_estimate = (sensor_percent / 100) × capacity`. The default weight of 0.3 means 30% sensor influence — enough to correct drift without overreacting to sensor noise.
 
 ### Skip Logic
 
@@ -108,12 +137,12 @@ Irrigation is skipped entirely when:
 
 ## Zone Configuration
 
-| Zone | Name | Switch | Kc | Capacity | Trigger | Description |
-|------|------|--------|-----|----------|---------|-------------|
-| 1 | Terrasse Tropfer | `diivoo_..._ventil_2` | 1.2 | 10mm | 30% | South, full sun, container plants |
-| 2 | Hecke Tropfer | `diivoo_..._ventil_3` | 0.8 | 25mm | 40% | South, full sun, lawn + hedge |
-| 3 | Vorgarten Tropfer | `diivoo_..._ventil_4` | 0.6 | 25mm | 40% | North, morning sun, flowers |
-| 4 | Seitliche Terrasse | `diivoo_..._ventil_1` | 0.9 | 15mm | 35% | West, mostly shade, raised bed |
+| Zone | Name | Switch | Kc | Capacity | Trigger | Sensor | Description |
+|------|------|--------|-----|----------|---------|--------|-------------|
+| 1 | Terrasse Tropfer | `diivoo_..._ventil_2` | 1.2 | 10mm | 30% | `gw3000a_soil_moisture_terrasse` | South, full sun, container plants |
+| 2 | Hecke Tropfer | `diivoo_..._ventil_3` | 0.8 | 25mm | 40% | `gw3000a_soil_moisture_hecke` | South, full sun, lawn + hedge |
+| 3 | Vorgarten Tropfer | `diivoo_..._ventil_4` | 0.6 | 25mm | 40% | `gw3000a_soil_moisture_vorgarten` | North, morning sun, flowers |
+| 4 | Seitliche Terrasse | `diivoo_..._ventil_1` | 0.9 | 15mm | 35% | `gw3000a_soil_moisture_hochbeet` | West, mostly shade, raised bed |
 
 ### Parameter Explanations
 
@@ -121,6 +150,9 @@ Irrigation is skipped entirely when:
 - **Capacity (mm)**: How much water the soil/container can hold. Small pots → 8-12mm, in-ground → 20-30mm
 - **Trigger (%)**: Water when balance drops below this % of capacity. Drought-tolerant → 40%+, thirsty plants → 25-30%
 - **Duration per mm**: How long to run drippers to deliver 1mm equivalent. Depends on flow rate and coverage area.
+- **Sensor wet threshold (%)**: Sensor reading above which irrigation is vetoed (default 50%)
+- **Sensor dry threshold (%)**: Sensor reading below which emergency irrigation is triggered (default 15%)
+- **Calibration weight**: How much the sensor corrects the model daily (default 0.3 = 30%)
 
 ## Sensors Created
 
@@ -128,16 +160,17 @@ Irrigation is skipped entirely when:
 | Entity | Description |
 |--------|-------------|
 | `sensor.irrigation_today_et0` | Reference evapotranspiration (mm/day) |
-| `sensor.irrigation_zone_X_daily_et` | Zone-specific ET (ET₀ × Kc) |
-| `sensor.irrigation_zone_X_balance_pct` | Soil moisture as % of capacity |
-| `sensor.irrigation_zone_X_deficit` | Water deficit in mm |
-| `sensor.irrigation_zone_X_recommended_duration` | Suggested run time (min) |
+| `sensor.zone_X_daily_et` | Zone-specific ET (ET₀ × Kc) |
+| `sensor.zone_X_balance_percent` | Model soil moisture as % of capacity |
+| `sensor.zone_X_deficit` | Water deficit in mm |
+| `sensor.zone_X_recommended_duration` | Suggested run time (min) |
+| `sensor.zone_X_soil_moisture_sensor` | Real sensor reading (%) with model comparison |
 | `sensor.irrigation_skip_reason` | Human-readable skip explanation |
 
 ### Binary Sensors
 | Entity | Description |
 |--------|-------------|
-| `binary_sensor.irrigation_zone_X_needs_water` | True when zone is below trigger |
+| `binary_sensor.zone_X_needs_water` | True when zone needs water (hybrid model+sensor logic) |
 | `binary_sensor.irrigation_rain_skip_active` | True when skip conditions are met |
 
 ### Input Numbers (persistent)
@@ -152,7 +185,10 @@ Irrigation is skipped entirely when:
 | `input_number.irrigation_max_duration` | Max single zone run (min) |
 | `input_number.irrigation_start_hour` | Morning scheduler start hour |
 | `input_number.irrigation_evening_hour` | Evening top-up hour |
-| `input_number.irrigation_evening_et_threshold` | ET₀ threshold to trigger evening run (mm) |
+| `input_number.irrigation_evening_et_threshold` | ET₀ threshold for evening run (mm) |
+| `input_number.irrigation_sensor_wet_threshold` | Sensor veto threshold (%) |
+| `input_number.irrigation_sensor_dry_threshold` | Sensor emergency threshold (%) |
+| `input_number.irrigation_sensor_calibration_weight` | Daily calibration blend factor |
 
 ## Automations
 
@@ -160,10 +196,15 @@ Irrigation is skipped entirely when:
 |-----------|---------|-------------|
 | Daily ET deduction | 23:55 daily | Subtracts ET loss, adds rain to all zones |
 | Rain credit | Rain sensor change | Credits actual rainfall in real-time |
-| Morning scheduler | Configured start hour | Main irrigation — checks conditions, runs zones sequentially |
-| Evening top-up | Configured evening hour | Second run for high-Kc zones on hot days (ET₀ > threshold) |
+| Sensor calibration | 15 min before start | Blends model with real sensor readings |
+| Morning scheduler | Configured start hour | Main irrigation — hybrid decision, sequential zones |
+| Evening top-up | Configured evening hour | Second run for high-Kc zones on hot days |
+| Sensor emergency | Sensor < dry threshold for 30 min | Immediate watering, queued (max 4) |
 | Safety shutoff | Valve on > 35 min | Emergency off + critical notification |
 | Startup safety | HA start | All valves off after restart |
+| Low battery warning | Battery < 20% | Push notification |
+| Connection lost | Offline > 5–10 min | Push notification |
+| Weekly summary | Sunday 20:00 | Model vs. sensor status report |
 
 ## Scripts
 
@@ -214,11 +255,20 @@ homeassistant:
 | `ZONE2_SWITCH` | ✅ | — | Entity ID of Zone 2 valve switch |
 | `ZONE3_SWITCH` | ✅ | — | Entity ID of Zone 3 valve switch |
 | `ZONE4_SWITCH` | ✅ | — | Entity ID of Zone 4 valve switch |
+| `ZONE1_SENSOR` | ✅ | — | Entity ID of Zone 1 soil moisture sensor |
+| `ZONE2_SENSOR` | ✅ | — | Entity ID of Zone 2 soil moisture sensor |
+| `ZONE3_SENSOR` | ✅ | — | Entity ID of Zone 3 soil moisture sensor |
+| `ZONE4_SENSOR` | ✅ | — | Entity ID of Zone 4 soil moisture sensor |
 | `ZONE1_NAME` | — | Zone 1 | Friendly name for Zone 1 |
 | `ZONE2_NAME` | — | Zone 2 | Friendly name for Zone 2 |
 | `ZONE3_NAME` | — | Zone 3 | Friendly name for Zone 3 |
 | `ZONE4_NAME` | — | Zone 4 | Friendly name for Zone 4 |
 | `IPHONE_DEVICE` | ✅ | — | iPhone device name for notifications |
+| `ZONE1_DEVICE_ID` | ✅ | — | DIIVOO device ID for Zone 1 (battery/connection) |
+| `ZONE4_DEVICE_ID` | ✅ | — | DIIVOO device ID for Zone 4 (battery/connection) |
+| `GATEWAY_CONNECTION_ENTITY` | ✅ | — | Gateway connectivity binary sensor |
+| `ZONE1_CONNECTION_ENTITY` | ✅ | — | Zone 1 valve connectivity sensor |
+| `ZONE4_CONNECTION_ENTITY` | ✅ | — | Zone 4 valve connectivity sensor |
 | `HA_CONFIG_MOUNT` | — | `/Volumes/config` | Mount point for HA config |
 | `HA_CONFIG_SMB_URL` | — | — | SMB URL for auto-mount |
 | `HA_URL` | — | — | HA base URL (enables API features) |
@@ -230,22 +280,44 @@ homeassistant:
 The included dashboard uses the modern **sections** view type with two views:
 
 ### Overview View
-- **System Status**: Master toggle, today's ET₀, rain skip status, frost warning
-- **Zone Cards** (×4): Moisture gauge, needs-water indicator, recommended duration, last watered, manual run button
+- **System Status**: Master toggle, today's ET₀, rain skip status, frost warning, batteries
+- **Zone Cards** (×4): Model gauge, real sensor reading, needs-water indicator, recommended duration, last watered, manual run button
 - **Weather**: Temperature, sunshine, radiation, rain, wind from KachelmannWetter
 - **History Charts** (7 days each):
-  - Soil moisture balances (all zones)
+  - Soil moisture sensors (real Ecowitt readings)
+  - Model balance (calculated water level)
   - Daily ET₀ and per-zone ET
   - Rainfall and skip events
-  - Weather drivers (temp, sun, wind, radiation)
+  - Weather drivers (temp, sun, wind)
   - Valve activity timeline
-- **Quick Actions**: Emergency stop all button
 
 ### Settings View
-- **Global Parameters**: Start hour, max duration, rain threshold
+- **Schedule & Limits**: Start hour, max duration, rain threshold
+- **Sensor Thresholds**: Wet threshold, dry threshold, calibration weight
 - **Per-Zone Settings**: Kc, capacity, trigger, duration/mm, current balance
 
 ## Tuning Guide
+
+### Sensor Threshold Tuning
+
+The Ecowitt soil moisture sensors report **volumetric water content** as a percentage. The meaning varies by soil type:
+
+| Soil Type | Dry | Moist | Wet | Saturated |
+|-----------|-----|-------|-----|-----------|
+| Sandy | < 10% | 10–20% | 20–35% | > 35% |
+| Loamy | < 15% | 15–30% | 30–45% | > 45% |
+| Clay | < 20% | 20–35% | 35–50% | > 50% |
+| Potting mix | < 15% | 15–35% | 35–55% | > 55% |
+
+**Recommended starting points:**
+- **Wet threshold** (50%): Lower to 40% for sandy soil, raise to 60% for clay
+- **Dry threshold** (15%): Most plants stress below 15%. Raise to 20% for sensitive plants.
+- **Calibration weight** (0.3): Start here. Increase to 0.4–0.5 if model drifts a lot. Decrease to 0.1–0.2 if sensors are in non-representative spots.
+
+**After 1–2 weeks of operation**, check:
+1. Does the sensor veto prevent necessary watering? → Lower wet threshold
+2. Does emergency trigger too often? → Lower dry threshold
+3. Do model and sensor diverge significantly? → Increase calibration weight
 
 ### Crop Coefficient (Kc) Reference
 
@@ -275,11 +347,12 @@ The included dashboard uses the modern **sections** view type with two views:
 
 ### Tuning Process
 
-1. **Start with defaults** — run for 3–5 days and observe
-2. **Check balance values** — if a zone's balance frequently hits 0, increase capacity or decrease Kc
-3. **Watch for over-watering** — if plants look waterlogged, increase trigger % or decrease duration_per_mm
-4. **Seasonal adjustment** — increase Kc by 0.1–0.2 in peak summer (Jul/Aug), decrease in spring/autumn
-5. **Container vs. ground** — containers need higher Kc (1.0+) because they can't draw from deeper soil
+1. **Start with defaults** — run for 3–5 days and observe sensor readings
+2. **Compare model vs. sensor** — the dashboard shows both side by side. If they diverge heavily, adjust calibration weight
+3. **Watch for sensor vetoes** — if the notification says "Sensor skip" but plants look dry, lower the wet threshold
+4. **Check balance values** — if a zone's balance frequently hits 0, increase capacity or decrease Kc
+5. **Seasonal adjustment** — increase Kc by 0.1–0.2 in peak summer (Jul/Aug), decrease in spring/autumn
+6. **Container vs. ground** — containers need higher Kc (1.0+) because they can't draw from deeper soil
 
 ## Troubleshooting
 
@@ -288,7 +361,8 @@ The included dashboard uses the modern **sections** view type with two views:
 2. Check `input_boolean.irrigation_enabled` is `on`
 3. Check zone-specific enable: `input_boolean.irrigation_zone_X_enabled`
 4. Check if rain skip is active: `binary_sensor.irrigation_rain_skip_active`
-5. Manually run a script: `script.irrigation_run_zone_1`
+5. Check sensor veto: is the sensor reading ≥ wet threshold?
+6. Manually run a script: `script.irrigation_run_zone_1`
 
 ### ET₀ shows 0 all day
 - Verify KachelmannWetter sensors have valid values (not `unavailable`)
@@ -297,27 +371,36 @@ The included dashboard uses the modern **sections** view type with two views:
 
 ### Balance never decreases
 - The ET deduction runs at **23:55** — check automation logs
-- Verify `sensor.irrigation_zone_X_daily_et` shows a non-zero value during the day
+- Verify `sensor.zone_X_daily_et` shows a non-zero value during the day
 - If ET₀ is 0, balance won't change (check weather sensors)
 
+### Sensor reads 0% but soil is moist
+- Ecowitt sensor batteries may be dead (check `sensor.gw3000a_soil_battery_X`)
+- Sensor may have lost connection to gateway
+- Check if sensor entity shows `unavailable` — the system falls back to model-only automatically
+
+### Sensor veto prevents needed watering
+- Lower `irrigation_sensor_wet_threshold` (e.g., from 50% to 40%)
+- Check if sensor is in a representative position (not in a dry pocket or near a water source)
+
+### Emergency irrigation triggers too often
+- Raise `irrigation_sensor_dry_threshold` (e.g., from 15% to 20%)
+- The 30-minute debounce prevents rapid re-triggering, but sustained low readings will trigger
+
 ### Watering too much / too little
-- **Too much**: Increase `trigger` %, decrease `duration_per_mm`, or decrease `Kc`
-- **Too little**: Decrease `trigger` %, increase `duration_per_mm`, or increase `Kc`
-- Check the history graph — balance should oscillate between trigger and capacity
+- **Too much**: Increase `trigger` %, decrease `duration_per_mm`, decrease `Kc`, or lower `wet_threshold`
+- **Too little**: Decrease `trigger` %, increase `duration_per_mm`, increase `Kc`, or raise `wet_threshold`
+- Check the history graph — model and sensor should roughly track each other over time
 
 ### Rain credit not working
 - Verify `sensor.kachelmannwetter_niederschlag_1h` updates during rain
 - The rain credit automation triggers on **state change** of the rain sensor
 - Check automation traces in Developer Tools → Automations
 
-### Safety shutoff triggered unexpectedly
-- Default safety timeout is 35 minutes. If your zones need longer runs, increase `irrigation_max_duration` and update the safety automation's `for` duration.
-- Check for MQTT connectivity issues that might cause delays between on/off commands.
-
-### After HA restart, irrigation ran with wrong values
-- Water balance is stored in `input_number` entities — these persist across restarts
-- However, a restart mid-irrigation will leave the balance un-credited for that run
-- The startup safety automation turns all valves off 30s after restart
+### After HA restart, entity IDs look wrong
+- Template sensor entity IDs are generated from their `name` field (e.g., "Zone 1 daily ET" → `sensor.zone_1_daily_et`)
+- If entity IDs don't match what automations expect, check the entity registry in `.storage/core.entity_registry`
+- A fresh install will generate entity IDs from names; an existing install keeps previously registered IDs
 
 ## License
 
