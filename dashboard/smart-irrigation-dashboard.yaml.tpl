@@ -30,17 +30,6 @@ views:
             entity: binary_sensor.irrigation_rain_skip_active
             name: Rain Skip
             color: blue
-          - type: button
-            entity: script.irrigation_stop_all
-            name: "STOP"
-            icon: mdi:stop-circle
-            icon_height: 30px
-            tap_action:
-              action: perform-action
-              perform_action: script.irrigation_stop_all
-
-      - title: "Bodenfeuchte"
-        cards:
           - type: tile
             entity: ${ZONE1_SENSOR}
             name: "${ZONE1_NAME}"
@@ -62,7 +51,7 @@ views:
             icon: mdi:liquid-spot
             color: cyan
           - type: history-graph
-            title: "Letzte 7 Tage"
+            title: "Bodenfeuchte (7 Tage)"
             hours_to_show: 168
             entities:
               - entity: ${ZONE1_SENSOR}
@@ -74,7 +63,7 @@ views:
               - entity: ${ZONE4_SENSOR}
                 name: "${ZONE4_NAME}"
 
-      - title: "Zonen"
+      - title: "Steuerung"
         cards:
           - type: entities
             entities:
@@ -91,30 +80,19 @@ views:
                 name: "${ZONE4_NAME}"
                 secondary_info: last-changed
           - type: entities
-            title: "Nächster Lauf"
             entities:
               - entity: sensor.zone_1_recommended_duration
                 name: "${ZONE1_NAME}"
+                icon: mdi:timer-sand
               - entity: sensor.zone_2_recommended_duration
                 name: "${ZONE2_NAME}"
+                icon: mdi:timer-sand
               - entity: sensor.zone_3_recommended_duration
                 name: "${ZONE3_NAME}"
+                icon: mdi:timer-sand
               - entity: sensor.zone_4_recommended_duration
                 name: "${ZONE4_NAME}"
-          - type: entities
-            title: "Letzter Lauf"
-            entities:
-              - entity: input_datetime.irrigation_zone_1_last_run
-                name: "${ZONE1_NAME}"
-              - entity: input_datetime.irrigation_zone_2_last_run
-                name: "${ZONE2_NAME}"
-              - entity: input_datetime.irrigation_zone_3_last_run
-                name: "${ZONE3_NAME}"
-              - entity: input_datetime.irrigation_zone_4_last_run
-                name: "${ZONE4_NAME}"
-
-      - title: "Manuell"
-        cards:
+                icon: mdi:timer-sand
           - type: button
             entity: script.irrigation_run_zone_1
             name: "${ZONE1_NAME}"
@@ -143,6 +121,13 @@ views:
             tap_action:
               action: perform-action
               perform_action: script.irrigation_run_zone_4
+          - type: button
+            entity: script.irrigation_stop_all
+            name: "STOP"
+            icon: mdi:stop-circle
+            tap_action:
+              action: perform-action
+              perform_action: script.irrigation_stop_all
 
   # ===========================================================================
   # VIEW 2: HISTORY — all graphs, for deep-dives
