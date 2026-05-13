@@ -672,7 +672,7 @@ template:
       # -----------------------------------------------------------------------
       - name: "Zone 1 needs water"
         unique_id: irrigation_zone_1_needs_water
-        device_class: moisture
+        device_class: problem
         icon: mdi:water-alert
         state: >-
           {% set balance = states('input_number.irrigation_zone_1_balance') | float(0) %}
@@ -693,7 +693,7 @@ template:
 
       - name: "Zone 2 needs water"
         unique_id: irrigation_zone_2_needs_water
-        device_class: moisture
+        device_class: problem
         icon: mdi:water-alert
         state: >-
           {% set balance = states('input_number.irrigation_zone_2_balance') | float(0) %}
@@ -714,7 +714,7 @@ template:
 
       - name: "Zone 3 needs water"
         unique_id: irrigation_zone_3_needs_water
-        device_class: moisture
+        device_class: problem
         icon: mdi:water-alert
         state: >-
           {% set balance = states('input_number.irrigation_zone_3_balance') | float(0) %}
@@ -735,7 +735,7 @@ template:
 
       - name: "Zone 4 needs water"
         unique_id: irrigation_zone_4_needs_water
-        device_class: moisture
+        device_class: problem
         icon: mdi:water-alert
         state: >-
           {% set balance = states('input_number.irrigation_zone_4_balance') | float(0) %}
