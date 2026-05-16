@@ -1243,6 +1243,101 @@ automation:
             group: irrigation
 
   # ---------------------------------------------------------------------------
+  # VALVE NOTIFICATION — Push on every valve open/close with zone details
+  # Replaces ON notification with OFF notification per zone (same tag).
+  # ---------------------------------------------------------------------------
+  - id: irrigation_valve_notification
+    alias: "Irrigation: Ventil-Benachrichtigung"
+    description: >-
+      Sendet eine Push-Nachricht wenn ein Bewässerungsventil öffnet oder schließt.
+      Zeigt Zone, Dauer, Bodenfeuchte und Wasserbalance an.
+    mode: queued
+    max: 8
+    trigger:
+      - platform: state
+        entity_id: ${ZONE1_SWITCH}
+        from: "off"
+        to: "on"
+        id: z1_on
+      - platform: state
+        entity_id: ${ZONE1_SWITCH}
+        from: "on"
+        to: "off"
+        id: z1_off
+      - platform: state
+        entity_id: ${ZONE2_SWITCH}
+        from: "off"
+        to: "on"
+        id: z2_on
+      - platform: state
+        entity_id: ${ZONE2_SWITCH}
+        from: "on"
+        to: "off"
+        id: z2_off
+      - platform: state
+        entity_id: ${ZONE3_SWITCH}
+        from: "off"
+        to: "on"
+        id: z3_on
+      - platform: state
+        entity_id: ${ZONE3_SWITCH}
+        from: "on"
+        to: "off"
+        id: z3_off
+      - platform: state
+        entity_id: ${ZONE4_SWITCH}
+        from: "off"
+        to: "on"
+        id: z4_on
+      - platform: state
+        entity_id: ${ZONE4_SWITCH}
+        from: "on"
+        to: "off"
+        id: z4_off
+    action:
+      - variables:
+          zone_num: "{{ trigger.id[1] }}"
+      - variables:
+          zone_name: >-
+            {% set names = {'1': '${ZONE1_NAME}', '2': '${ZONE2_NAME}', '3': '${ZONE3_NAME}', '4': '${ZONE4_NAME}'} %}
+            {{ names[zone_num] }}
+          moisture: >-
+            {% set sensors = {'1': '${ZONE1_SENSOR}', '2': '${ZONE2_SENSOR}', '3': '${ZONE3_SENSOR}', '4': '${ZONE4_SENSOR}'} %}
+            {{ states(sensors[zone_num]) }}
+          balance: "{{ states('input_number.irrigation_zone_' ~ zone_num ~ '_balance') | float(0) | round(1) }}"
+          capacity: "{{ states('input_number.irrigation_zone_' ~ zone_num ~ '_capacity') | float(10) | round(0) | int }}"
+          duration_planned: "{{ states('sensor.zone_' ~ zone_num ~ '_recommended_duration') | int(0) }}"
+          et0_today: "{{ states('sensor.irrigation_today_et0') }}"
+          runtime: >-
+            {% if trigger.to_state.state == 'off' %}
+            {{ ((trigger.to_state.last_changed - trigger.from_state.last_changed).total_seconds() / 60) | round(0) | int }}
+            {% else %}
+            0
+            {% endif %}
+      - service: notify.mobile_app_${IPHONE_DEVICE}
+        data:
+          title: >-
+            {% if trigger.to_state.state == 'on' %}
+            💧 {{ zone_name }} gestartet
+            {% else %}
+            ✅ {{ zone_name }} fertig
+            {% endif %}
+          message: >-
+            {% if trigger.to_state.state == 'on' %}
+            ⏱ Geplant: {{ duration_planned }} min
+            🌡 Bodenfeuchte: {{ moisture }}%
+            📊 Balance: {{ balance }}mm / {{ capacity }}mm
+            ☀️ ET₀ heute: {{ et0_today }}mm
+            {% else %}
+            ⏱ Laufzeit: {{ runtime }} min
+            🌡 Bodenfeuchte: {{ moisture }}%
+            📊 Balance: {{ balance }}mm / {{ capacity }}mm
+            {% endif %}
+          data:
+            tag: "irrigation-zone-{{ zone_num }}-valve"
+            group: irrigation
+
+  # ---------------------------------------------------------------------------
   # Safety: Turn off all valves if any has been on for too long
   # Prevents flooding if an automation gets stuck or HA restarts mid-run.
   # ---------------------------------------------------------------------------
