@@ -1297,16 +1297,15 @@ automation:
     action:
       - variables:
           zone_num: "{{ trigger.id[1] }}"
-      - variables:
           zone_name: >-
             {% set names = {'1': '${ZONE1_NAME}', '2': '${ZONE2_NAME}', '3': '${ZONE3_NAME}', '4': '${ZONE4_NAME}'} %}
-            {{ names[zone_num] }}
+            {{ names[trigger.id[1]] }}
           moisture: >-
             {% set sensors = {'1': '${ZONE1_SENSOR}', '2': '${ZONE2_SENSOR}', '3': '${ZONE3_SENSOR}', '4': '${ZONE4_SENSOR}'} %}
-            {{ states(sensors[zone_num]) }}
-          balance: "{{ states('input_number.irrigation_zone_' ~ zone_num ~ '_balance') | float(0) | round(1) }}"
-          capacity: "{{ states('input_number.irrigation_zone_' ~ zone_num ~ '_capacity') | float(10) | round(0) | int }}"
-          duration_planned: "{{ states('sensor.zone_' ~ zone_num ~ '_recommended_duration') | int(0) }}"
+            {{ states(sensors[trigger.id[1]]) }}
+          balance: "{{ states('input_number.irrigation_zone_' ~ trigger.id[1] ~ '_balance') | float(0) | round(1) }}"
+          capacity: "{{ states('input_number.irrigation_zone_' ~ trigger.id[1] ~ '_capacity') | float(10) | round(0) | int }}"
+          duration_planned: "{{ states('sensor.zone_' ~ trigger.id[1] ~ '_recommended_duration') | int(0) }}"
           et0_today: "{{ states('sensor.irrigation_today_et0') }}"
           runtime: >-
             {% if trigger.to_state.state == 'off' %}
