@@ -307,13 +307,13 @@ input_number:
 
   irrigation_evening_hour:
     name: "Evening watering hour"
-    min: 18
+    min: 16
     max: 23
-    step: 1
+    step: 0.5
     unit_of_measurement: "h"
     icon: mdi:clock-end
     mode: box
-    initial: 20
+    initial: 21.5
 
   irrigation_evening_et_threshold:
     name: "Evening run ET₀ threshold"
@@ -346,16 +346,16 @@ input_number:
     unit_of_measurement: "%"
     icon: mdi:water-alert
     mode: slider
-    initial: 25
+    initial: 30
 
   irrigation_sensor_calibration_weight:
     name: "Sensor calibration weight"
     min: 0
-    max: 0.5
+    max: 1.0
     step: 0.05
     icon: mdi:scale-balance
     mode: slider
-    initial: 0.3
+    initial: 0.8
 
 
 # =============================================================================
@@ -401,7 +401,9 @@ template:
         state_class: measurement
         icon: mdi:weather-sunny-alert
         state: >-
-          {% set sunshine = states('sensor.kachelmannwetter_sonnenstunden_heute') | float(0) %}
+          {% set max_sun = states('sensor.kachelmannwetter_max_mogliche_sonnenstunden_heute') | float(15) %}
+          {% set rel_sun = states('sensor.kachelmannwetter_sonnenschein_relativ_heute') | float(0) %}
+          {% set sunshine = max_sun * (rel_sun / 100) %}
           {% set temp = states('sensor.aussentemperatur_gerundet') | float(15) %}
           {% set wind = states('sensor.kachelmannwetter_windboen_maximum_heute') | float(0) %}
           {% set radiation = states('sensor.kachelmannwetter_globalstrahlung_heute') | float(0) %}
@@ -417,7 +419,10 @@ template:
           {% endif %}
           {{ [et0 | round(1), 0] | max }}
         attributes:
-          sunshine_hours: "{{ states('sensor.kachelmannwetter_sonnenstunden_heute') }}"
+          sunshine_hours: >-
+            {% set max_sun = states('sensor.kachelmannwetter_max_mogliche_sonnenstunden_heute') | float(15) %}
+            {% set rel_sun = states('sensor.kachelmannwetter_sonnenschein_relativ_heute') | float(0) %}
+            {{ (max_sun * (rel_sun / 100)) | round(1) }}
           temperature: "{{ states('sensor.aussentemperatur_gerundet') }}"
           wind_max: "{{ states('sensor.kachelmannwetter_windboen_maximum_heute') }}"
           radiation: "{{ states('sensor.kachelmannwetter_globalstrahlung_heute') }}"
@@ -564,27 +569,51 @@ template:
         unit_of_measurement: "mm"
         icon: mdi:water-alert
         state: >-
-          {% set balance = states('input_number.irrigation_zone_1_balance') | float(0) %}
           {% set capacity = states('input_number.irrigation_zone_1_capacity') | float(10) %}
-          {{ (capacity - balance) | round(1) }}
+          {% set sensor_val = states('${ZONE1_SENSOR}') %}
+          {% set sensor_ok = sensor_val not in ['unavailable', 'unknown'] %}
+          {% if sensor_ok %}
+            {% set sensor_pct = sensor_val | float(0) %}
+            {% set sensor_mm = (sensor_pct / 100) * capacity %}
+            {{ (capacity - sensor_mm) | round(1) }}
+          {% else %}
+            {% set balance = states('input_number.irrigation_zone_1_balance') | float(0) %}
+            {{ (capacity - balance) | round(1) }}
+          {% endif %}
 
       - name: "Zone 2 deficit"
         unique_id: irrigation_zone_2_deficit
         unit_of_measurement: "mm"
         icon: mdi:water-alert
         state: >-
-          {% set balance = states('input_number.irrigation_zone_2_balance') | float(0) %}
           {% set capacity = states('input_number.irrigation_zone_2_capacity') | float(25) %}
-          {{ (capacity - balance) | round(1) }}
+          {% set sensor_val = states('${ZONE2_SENSOR}') %}
+          {% set sensor_ok = sensor_val not in ['unavailable', 'unknown'] %}
+          {% if sensor_ok %}
+            {% set sensor_pct = sensor_val | float(0) %}
+            {% set sensor_mm = (sensor_pct / 100) * capacity %}
+            {{ (capacity - sensor_mm) | round(1) }}
+          {% else %}
+            {% set balance = states('input_number.irrigation_zone_2_balance') | float(0) %}
+            {{ (capacity - balance) | round(1) }}
+          {% endif %}
 
       - name: "Zone 3 deficit"
         unique_id: irrigation_zone_3_deficit
         unit_of_measurement: "mm"
         icon: mdi:water-alert
         state: >-
-          {% set balance = states('input_number.irrigation_zone_3_balance') | float(0) %}
           {% set capacity = states('input_number.irrigation_zone_3_capacity') | float(25) %}
-          {{ (capacity - balance) | round(1) }}
+          {% set sensor_val = states('${ZONE3_SENSOR}') %}
+          {% set sensor_ok = sensor_val not in ['unavailable', 'unknown'] %}
+          {% if sensor_ok %}
+            {% set sensor_pct = sensor_val | float(0) %}
+            {% set sensor_mm = (sensor_pct / 100) * capacity %}
+            {{ (capacity - sensor_mm) | round(1) }}
+          {% else %}
+            {% set balance = states('input_number.irrigation_zone_3_balance') | float(0) %}
+            {{ (capacity - balance) | round(1) }}
+          {% endif %}
 
       - name: "Zone 4 deficit"
         unique_id: irrigation_zone_4_deficit
@@ -593,7 +622,15 @@ template:
         state: >-
           {% set balance = states('input_number.irrigation_zone_4_balance') | float(0) %}
           {% set capacity = states('input_number.irrigation_zone_4_capacity') | float(15) %}
-          {{ (capacity - balance) | round(1) }}
+          {% set sensor_val = states('${ZONE4_SENSOR}') %}
+          {% set sensor_ok = sensor_val not in ['unavailable', 'unknown'] %}
+          {% if sensor_ok %}
+            {% set sensor_pct = sensor_val | float(0) %}
+            {% set sensor_mm = (sensor_pct / 100) * capacity %}
+            {{ (capacity - sensor_mm) | round(1) }}
+          {% else %}
+            {{ (capacity - balance) | round(1) }}
+          {% endif %}
 
       # -----------------------------------------------------------------------
       # Per-zone recommended irrigation duration (minutes)
@@ -603,44 +640,232 @@ template:
         unit_of_measurement: "min"
         icon: mdi:timer-sand
         state: >-
-          {% set deficit = states('sensor.zone_1_deficit') | float(0) %}
-          {% set per_mm = states('input_number.irrigation_zone_1_duration_per_mm') | float(3) %}
-          {% set max_dur = states('input_number.irrigation_max_duration') | float(30) %}
-          {% set duration = (deficit * per_mm) | round(0) %}
-          {{ [duration, max_dur | int] | min }}
+          {% if is_state('binary_sensor.zone_1_needs_water', 'on') %}
+            {% set deficit = states('sensor.zone_1_deficit') | float(0) %}
+            {% set per_mm = states('input_number.irrigation_zone_1_duration_per_mm') | float(3) %}
+            {% set max_dur = states('input_number.irrigation_max_duration') | float(30) %}
+            {% set duration = (deficit * per_mm) | round(0) %}
+            {{ [duration, max_dur | int] | min }}
+          {% else %}
+            0
+          {% endif %}
 
       - name: "Zone 2 recommended duration"
         unique_id: irrigation_zone_2_recommended_duration
         unit_of_measurement: "min"
         icon: mdi:timer-sand
         state: >-
-          {% set deficit = states('sensor.zone_2_deficit') | float(0) %}
-          {% set per_mm = states('input_number.irrigation_zone_2_duration_per_mm') | float(3) %}
-          {% set max_dur = states('input_number.irrigation_max_duration') | float(30) %}
-          {% set duration = (deficit * per_mm) | round(0) %}
-          {{ [duration, max_dur | int] | min }}
+          {% if is_state('binary_sensor.zone_2_needs_water', 'on') %}
+            {% set deficit = states('sensor.zone_2_deficit') | float(0) %}
+            {% set per_mm = states('input_number.irrigation_zone_2_duration_per_mm') | float(3) %}
+            {% set max_dur = states('input_number.irrigation_max_duration') | float(30) %}
+            {% set duration = (deficit * per_mm) | round(0) %}
+            {{ [duration, max_dur | int] | min }}
+          {% else %}
+            0
+          {% endif %}
 
       - name: "Zone 3 recommended duration"
         unique_id: irrigation_zone_3_recommended_duration
         unit_of_measurement: "min"
         icon: mdi:timer-sand
         state: >-
-          {% set deficit = states('sensor.zone_3_deficit') | float(0) %}
-          {% set per_mm = states('input_number.irrigation_zone_3_duration_per_mm') | float(3) %}
-          {% set max_dur = states('input_number.irrigation_max_duration') | float(30) %}
-          {% set duration = (deficit * per_mm) | round(0) %}
-          {{ [duration, max_dur | int] | min }}
+          {% if is_state('binary_sensor.zone_3_needs_water', 'on') %}
+            {% set deficit = states('sensor.zone_3_deficit') | float(0) %}
+            {% set per_mm = states('input_number.irrigation_zone_3_duration_per_mm') | float(3) %}
+            {% set max_dur = states('input_number.irrigation_max_duration') | float(30) %}
+            {% set duration = (deficit * per_mm) | round(0) %}
+            {{ [duration, max_dur | int] | min }}
+          {% else %}
+            0
+          {% endif %}
 
       - name: "Zone 4 recommended duration"
         unique_id: irrigation_zone_4_recommended_duration
         unit_of_measurement: "min"
         icon: mdi:timer-sand
         state: >-
-          {% set deficit = states('sensor.zone_4_deficit') | float(0) %}
-          {% set per_mm = states('input_number.irrigation_zone_4_duration_per_mm') | float(3) %}
-          {% set max_dur = states('input_number.irrigation_max_duration') | float(30) %}
-          {% set duration = (deficit * per_mm) | round(0) %}
-          {{ [duration, max_dur | int] | min }}
+          {% if is_state('binary_sensor.zone_4_needs_water', 'on') %}
+            {% set deficit = states('sensor.zone_4_deficit') | float(0) %}
+            {% set per_mm = states('input_number.irrigation_zone_4_duration_per_mm') | float(3) %}
+            {% set max_dur = states('input_number.irrigation_max_duration') | float(30) %}
+            {% set duration = (deficit * per_mm) | round(0) %}
+            {{ [duration, max_dur | int] | min }}
+          {% else %}
+            0
+          {% endif %}
+
+      - name: "Zone 1 needs water text"
+        unique_id: irrigation_zone_1_needs_water_text
+        state: >-
+          {{ 'braucht Wasser' if is_state('binary_sensor.zone_1_needs_water', 'on') else 'braucht kein Wasser' }}
+        icon: >-
+          {{ 'mdi:water' if is_state('binary_sensor.zone_1_needs_water', 'on') else 'mdi:water-outline' }}
+
+      - name: "Zone 2 needs water text"
+        unique_id: irrigation_zone_2_needs_water_text
+        state: >-
+          {{ 'braucht Wasser' if is_state('binary_sensor.zone_2_needs_water', 'on') else 'braucht kein Wasser' }}
+        icon: >-
+          {{ 'mdi:water' if is_state('binary_sensor.zone_2_needs_water', 'on') else 'mdi:water-outline' }}
+
+      - name: "Zone 3 needs water text"
+        unique_id: irrigation_zone_3_needs_water_text
+        state: >-
+          {{ 'braucht Wasser' if is_state('binary_sensor.zone_3_needs_water', 'on') else 'braucht kein Wasser' }}
+        icon: >-
+          {{ 'mdi:water' if is_state('binary_sensor.zone_3_needs_water', 'on') else 'mdi:water-outline' }}
+
+      - name: "Zone 4 needs water text"
+        unique_id: irrigation_zone_4_needs_water_text
+        state: >-
+          {{ 'braucht Wasser' if is_state('binary_sensor.zone_4_needs_water', 'on') else 'braucht kein Wasser' }}
+        icon: >-
+          {{ 'mdi:water' if is_state('binary_sensor.zone_4_needs_water', 'on') else 'mdi:water-outline' }}
+
+      - name: "Zone 1 next watering"
+        unique_id: irrigation_zone_1_next_watering
+        icon: mdi:calendar-clock
+        state: >-
+          {% set enabled = is_state('input_boolean.irrigation_enabled', 'on') and is_state('input_boolean.irrigation_zone_1_enabled', 'on') %}
+          {% if not enabled %}
+            Deaktiviert
+          {% else %}
+            {% set current_time = now() %}
+            {% set rain_skip = is_state('binary_sensor.irrigation_rain_skip_active', 'on') %}
+            {% set et_threshold = states('input_number.irrigation_evening_et_threshold') | float(5) %}
+            {% set et0 = states('sensor.irrigation_today_et0') | float(0) %}
+            {% set kc = states('input_number.irrigation_zone_1_kc') | float(0) %}
+            {% set evening_hour = states('input_number.irrigation_evening_hour') | float(21.5) %}
+            {% set eh = evening_hour | int %}
+            {% set em = ((evening_hour - eh) * 60) | int %}
+            {% set start_hour = states('input_number.irrigation_start_hour') | float(5) %}
+            {% set sh = start_hour | int %}
+            {% set sm = ((start_hour - sh) * 60) | int %}
+            {% set evening_time = current_time.replace(hour=eh, minute=em, second=0, microsecond=0) %}
+            {% set morning_time = current_time.replace(hour=sh, minute=sm, second=0, microsecond=0) %}
+            {% set needs_water = is_state('binary_sensor.zone_1_needs_water', 'on') %}
+            {% set will_water_evening = not rain_skip and et0 > et_threshold and kc >= 0.9 %}
+            {% if will_water_evening and current_time < evening_time %}
+              Heute Abend um {{ "%02d:%02d"|format(eh, em) }} Uhr
+            {% elif needs_water %}
+              {% if current_time < morning_time %}
+                Heute früh um {{ "%02d:%02d"|format(sh, sm) }} Uhr
+              {% else %}
+                Morgen früh um {{ "%02d:%02d"|format(sh, sm) }} Uhr
+              {% endif %}
+            {% else %}
+              Aktuell kein Bedarf
+            {% endif %}
+          {% endif %}
+
+      - name: "Zone 2 next watering"
+        unique_id: irrigation_zone_2_next_watering
+        icon: mdi:calendar-clock
+        state: >-
+          {% set enabled = is_state('input_boolean.irrigation_enabled', 'on') and is_state('input_boolean.irrigation_zone_2_enabled', 'on') %}
+          {% if not enabled %}
+            Deaktiviert
+          {% else %}
+            {% set current_time = now() %}
+            {% set rain_skip = is_state('binary_sensor.irrigation_rain_skip_active', 'on') %}
+            {% set et_threshold = states('input_number.irrigation_evening_et_threshold') | float(5) %}
+            {% set et0 = states('sensor.irrigation_today_et0') | float(0) %}
+            {% set kc = states('input_number.irrigation_zone_2_kc') | float(0) %}
+            {% set evening_hour = states('input_number.irrigation_evening_hour') | float(21.5) %}
+            {% set eh = evening_hour | int %}
+            {% set em = ((evening_hour - eh) * 60) | int %}
+            {% set start_hour = states('input_number.irrigation_start_hour') | float(5) %}
+            {% set sh = start_hour | int %}
+            {% set sm = ((start_hour - sh) * 60) | int %}
+            {% set evening_time = current_time.replace(hour=eh, minute=em, second=0, microsecond=0) %}
+            {% set morning_time = current_time.replace(hour=sh, minute=sm, second=0, microsecond=0) %}
+            {% set needs_water = is_state('binary_sensor.zone_2_needs_water', 'on') %}
+            {% set will_water_evening = not rain_skip and et0 > et_threshold and kc >= 0.9 %}
+            {% if will_water_evening and current_time < evening_time %}
+              Heute Abend um {{ "%02d:%02d"|format(eh, em) }} Uhr
+            {% elif needs_water %}
+              {% if current_time < morning_time %}
+                Heute früh um {{ "%02d:%02d"|format(sh, sm) }} Uhr
+              {% else %}
+                Morgen früh um {{ "%02d:%02d"|format(sh, sm) }} Uhr
+              {% endif %}
+            {% else %}
+              Aktuell kein Bedarf
+            {% endif %}
+          {% endif %}
+
+      - name: "Zone 3 next watering"
+        unique_id: irrigation_zone_3_next_watering
+        icon: mdi:calendar-clock
+        state: >-
+          {% set enabled = is_state('input_boolean.irrigation_enabled', 'on') and is_state('input_boolean.irrigation_zone_3_enabled', 'on') %}
+          {% if not enabled %}
+            Deaktiviert
+          {% else %}
+            {% set current_time = now() %}
+            {% set rain_skip = is_state('binary_sensor.irrigation_rain_skip_active', 'on') %}
+            {% set et_threshold = states('input_number.irrigation_evening_et_threshold') | float(5) %}
+            {% set et0 = states('sensor.irrigation_today_et0') | float(0) %}
+            {% set kc = states('input_number.irrigation_zone_3_kc') | float(0) %}
+            {% set evening_hour = states('input_number.irrigation_evening_hour') | float(21.5) %}
+            {% set eh = evening_hour | int %}
+            {% set em = ((evening_hour - eh) * 60) | int %}
+            {% set start_hour = states('input_number.irrigation_start_hour') | float(5) %}
+            {% set sh = start_hour | int %}
+            {% set sm = ((start_hour - sh) * 60) | int %}
+            {% set evening_time = current_time.replace(hour=eh, minute=em, second=0, microsecond=0) %}
+            {% set morning_time = current_time.replace(hour=sh, minute=sm, second=0, microsecond=0) %}
+            {% set needs_water = is_state('binary_sensor.zone_3_needs_water', 'on') %}
+            {% set will_water_evening = not rain_skip and et0 > et_threshold and kc >= 0.9 %}
+            {% if will_water_evening and current_time < evening_time %}
+              Heute Abend um {{ "%02d:%02d"|format(eh, em) }} Uhr
+            {% elif needs_water %}
+              {% if current_time < morning_time %}
+                Heute früh um {{ "%02d:%02d"|format(sh, sm) }} Uhr
+              {% else %}
+                Morgen früh um {{ "%02d:%02d"|format(sh, sm) }} Uhr
+              {% endif %}
+            {% else %}
+              Aktuell kein Bedarf
+            {% endif %}
+          {% endif %}
+
+      - name: "Zone 4 next watering"
+        unique_id: irrigation_zone_4_next_watering
+        icon: mdi:calendar-clock
+        state: >-
+          {% set enabled = is_state('input_boolean.irrigation_enabled', 'on') and is_state('input_boolean.irrigation_zone_4_enabled', 'on') %}
+          {% if not enabled %}
+            Deaktiviert
+          {% else %}
+            {% set current_time = now() %}
+            {% set rain_skip = is_state('binary_sensor.irrigation_rain_skip_active', 'on') %}
+            {% set et_threshold = states('input_number.irrigation_evening_et_threshold') | float(5) %}
+            {% set et0 = states('sensor.irrigation_today_et0') | float(0) %}
+            {% set kc = states('input_number.irrigation_zone_4_kc') | float(0) %}
+            {% set evening_hour = states('input_number.irrigation_evening_hour') | float(21.5) %}
+            {% set eh = evening_hour | int %}
+            {% set em = ((evening_hour - eh) * 60) | int %}
+            {% set start_hour = states('input_number.irrigation_start_hour') | float(5) %}
+            {% set sh = start_hour | int %}
+            {% set sm = ((start_hour - sh) * 60) | int %}
+            {% set evening_time = current_time.replace(hour=eh, minute=em, second=0, microsecond=0) %}
+            {% set morning_time = current_time.replace(hour=sh, minute=sm, second=0, microsecond=0) %}
+            {% set needs_water = is_state('binary_sensor.zone_4_needs_water', 'on') %}
+            {% set will_water_evening = not rain_skip and et0 > et_threshold and kc >= 0.9 %}
+            {% if will_water_evening and current_time < evening_time %}
+              Heute Abend um {{ "%02d:%02d"|format(eh, em) }} Uhr
+            {% elif needs_water %}
+              {% if current_time < morning_time %}
+                Heute früh um {{ "%02d:%02d"|format(sh, sm) }} Uhr
+              {% else %}
+                Morgen früh um {{ "%02d:%02d"|format(sh, sm) }} Uhr
+              {% endif %}
+            {% else %}
+              Aktuell kein Bedarf
+            {% endif %}
+          {% endif %}
 
       # -----------------------------------------------------------------------
       # Rain skip reason (human-readable text)
@@ -682,8 +907,8 @@ template:
           {% set model_needs = balance < threshold %}
           {% set sensor_val = states('${ZONE1_SENSOR}') %}
           {% set sensor_ok = sensor_val not in ['unavailable', 'unknown'] %}
-          {% set wet_th = states('input_number.irrigation_sensor_wet_threshold') | float(50) %}
-          {% set dry_th = states('input_number.irrigation_sensor_dry_threshold') | float(15) %}
+          {% set wet_th = states('input_number.irrigation_sensor_wet_threshold') | float(45) %}
+          {% set dry_th = states('input_number.irrigation_sensor_dry_threshold') | float(30) %}
           {% if sensor_ok %}
             {% set sv = sensor_val | float(0) %}
             {{ (model_needs and sv < wet_th) or sv < dry_th }}
@@ -703,8 +928,8 @@ template:
           {% set model_needs = balance < threshold %}
           {% set sensor_val = states('${ZONE2_SENSOR}') %}
           {% set sensor_ok = sensor_val not in ['unavailable', 'unknown'] %}
-          {% set wet_th = states('input_number.irrigation_sensor_wet_threshold') | float(50) %}
-          {% set dry_th = states('input_number.irrigation_sensor_dry_threshold') | float(15) %}
+          {% set wet_th = states('input_number.irrigation_sensor_wet_threshold') | float(45) %}
+          {% set dry_th = states('input_number.irrigation_sensor_dry_threshold') | float(30) %}
           {% if sensor_ok %}
             {% set sv = sensor_val | float(0) %}
             {{ (model_needs and sv < wet_th) or sv < dry_th }}
@@ -724,8 +949,8 @@ template:
           {% set model_needs = balance < threshold %}
           {% set sensor_val = states('${ZONE3_SENSOR}') %}
           {% set sensor_ok = sensor_val not in ['unavailable', 'unknown'] %}
-          {% set wet_th = states('input_number.irrigation_sensor_wet_threshold') | float(50) %}
-          {% set dry_th = states('input_number.irrigation_sensor_dry_threshold') | float(15) %}
+          {% set wet_th = states('input_number.irrigation_sensor_wet_threshold') | float(45) %}
+          {% set dry_th = states('input_number.irrigation_sensor_dry_threshold') | float(30) %}
           {% if sensor_ok %}
             {% set sv = sensor_val | float(0) %}
             {{ (model_needs and sv < wet_th) or sv < dry_th }}
@@ -745,8 +970,8 @@ template:
           {% set model_needs = balance < threshold %}
           {% set sensor_val = states('${ZONE4_SENSOR}') %}
           {% set sensor_ok = sensor_val not in ['unavailable', 'unknown'] %}
-          {% set wet_th = states('input_number.irrigation_sensor_wet_threshold') | float(50) %}
-          {% set dry_th = states('input_number.irrigation_sensor_dry_threshold') | float(15) %}
+          {% set wet_th = states('input_number.irrigation_sensor_wet_threshold') | float(45) %}
+          {% set dry_th = states('input_number.irrigation_sensor_dry_threshold') | float(30) %}
           {% if sensor_ok %}
             {% set sv = sensor_val | float(0) %}
             {{ (model_needs and sv < wet_th) or sv < dry_th }}
@@ -924,7 +1149,7 @@ automation:
         state: "on"
     action:
       - variables:
-          weight: "{{ states('input_number.irrigation_sensor_calibration_weight') | float(0.3) }}"
+          weight: "{{ states('input_number.irrigation_sensor_calibration_weight') | float(0.8) }}"
 
       # --- Zone 1 calibration ---
       - if:
@@ -1466,8 +1691,10 @@ automation:
     trigger:
       - platform: template
         value_template: >-
-          {{ now().hour == states('input_number.irrigation_evening_hour') | int(20)
-             and now().minute == 0 }}
+          {% set target = states('input_number.irrigation_evening_hour') | float(20) %}
+          {% set target_hour = target | int %}
+          {% set target_minute = ((target - target_hour) * 60) | int %}
+          {{ now().hour == target_hour and now().minute == target_minute }}
     condition:
       - condition: state
         entity_id: input_boolean.irrigation_enabled

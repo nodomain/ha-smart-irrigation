@@ -13,7 +13,7 @@ views:
     icon: mdi:sprinkler-variant
     type: sections
     sections:
-      - title: "Status"
+      - title: "Status & Steuerung"
         cards:
           - type: tile
             entity: input_boolean.irrigation_enabled
@@ -31,6 +31,59 @@ views:
             name: Regen-Pause
             icon: mdi:weather-pouring
             color: blue
+          - type: entities
+            title: "Nächste Bewässerung"
+            entities:
+              - entity: sensor.zone_1_next_watering
+                name: "${ZONE1_NAME}"
+              - entity: sensor.zone_2_next_watering
+                name: "${ZONE2_NAME}"
+              - entity: sensor.zone_3_next_watering
+                name: "${ZONE3_NAME}"
+              - entity: sensor.zone_4_next_watering
+                name: "${ZONE4_NAME}"
+          - type: vertical-stack
+            cards:
+              - type: grid
+                columns: 2
+                square: false
+                cards:
+                  - type: button
+                    entity: script.irrigation_run_zone_1
+                    name: "${ZONE1_NAME}"
+                    icon: mdi:sprinkler
+                    tap_action:
+                      action: perform-action
+                      perform_action: script.irrigation_run_zone_1
+                  - type: button
+                    entity: script.irrigation_run_zone_2
+                    name: "${ZONE2_NAME}"
+                    icon: mdi:sprinkler
+                    tap_action:
+                      action: perform-action
+                      perform_action: script.irrigation_run_zone_2
+                  - type: button
+                    entity: script.irrigation_run_zone_3
+                    name: "${ZONE3_NAME}"
+                    icon: mdi:sprinkler
+                    tap_action:
+                      action: perform-action
+                      perform_action: script.irrigation_run_zone_3
+                  - type: button
+                    entity: script.irrigation_run_zone_4
+                    name: "${ZONE4_NAME}"
+                    icon: mdi:sprinkler
+                    tap_action:
+                      action: perform-action
+                      perform_action: script.irrigation_run_zone_4
+              - type: button
+                entity: script.irrigation_stop_all
+                name: "ALLE ZONEN STOPPEN"
+                icon: mdi:stop-circle
+                color: red
+                tap_action:
+                  action: perform-action
+                  perform_action: script.irrigation_stop_all
 
       - title: "Bodenfeuchte"
         cards:
@@ -67,71 +120,34 @@ views:
               - entity: ${ZONE4_SENSOR}
                 name: "${ZONE4_NAME}"
 
-      - title: "Bewässerungsbedarf"
+      - title: "Bedarf & Gießzeiten"
         cards:
           - type: entities
             entities:
-              - entity: binary_sensor.zone_1_needs_water
+              - entity: sensor.zone_1_needs_water_text
                 name: "${ZONE1_NAME}"
                 secondary_info: last-changed
-              - entity: binary_sensor.zone_2_needs_water
-                name: "${ZONE2_NAME}"
-                secondary_info: last-changed
-              - entity: binary_sensor.zone_3_needs_water
-                name: "${ZONE3_NAME}"
-                secondary_info: last-changed
-              - entity: binary_sensor.zone_4_needs_water
-                name: "${ZONE4_NAME}"
-                secondary_info: last-changed
-          - type: entities
-            entities:
               - entity: sensor.zone_1_recommended_duration
-                name: "${ZONE1_NAME}"
+                name: "   ↳ Gießzeit"
                 icon: mdi:timer-sand
-              - entity: sensor.zone_2_recommended_duration
+              - entity: sensor.zone_2_needs_water_text
                 name: "${ZONE2_NAME}"
+                secondary_info: last-changed
+              - entity: sensor.zone_2_recommended_duration
+                name: "   ↳ Gießzeit"
                 icon: mdi:timer-sand
-              - entity: sensor.zone_3_recommended_duration
+              - entity: sensor.zone_3_needs_water_text
                 name: "${ZONE3_NAME}"
+                secondary_info: last-changed
+              - entity: sensor.zone_3_recommended_duration
+                name: "   ↳ Gießzeit"
                 icon: mdi:timer-sand
-              - entity: sensor.zone_4_recommended_duration
+              - entity: sensor.zone_4_needs_water_text
                 name: "${ZONE4_NAME}"
+                secondary_info: last-changed
+              - entity: sensor.zone_4_recommended_duration
+                name: "   ↳ Gießzeit"
                 icon: mdi:timer-sand
-          - type: button
-            entity: script.irrigation_run_zone_1
-            name: "${ZONE1_NAME}"
-            icon: mdi:sprinkler
-            tap_action:
-              action: perform-action
-              perform_action: script.irrigation_run_zone_1
-          - type: button
-            entity: script.irrigation_run_zone_2
-            name: "${ZONE2_NAME}"
-            icon: mdi:sprinkler
-            tap_action:
-              action: perform-action
-              perform_action: script.irrigation_run_zone_2
-          - type: button
-            entity: script.irrigation_run_zone_3
-            name: "${ZONE3_NAME}"
-            icon: mdi:sprinkler
-            tap_action:
-              action: perform-action
-              perform_action: script.irrigation_run_zone_3
-          - type: button
-            entity: script.irrigation_run_zone_4
-            name: "${ZONE4_NAME}"
-            icon: mdi:sprinkler
-            tap_action:
-              action: perform-action
-              perform_action: script.irrigation_run_zone_4
-          - type: button
-            entity: script.irrigation_stop_all
-            name: "STOP"
-            icon: mdi:stop-circle
-            tap_action:
-              action: perform-action
-              perform_action: script.irrigation_stop_all
 
   # ===========================================================================
   # VIEW 2: HISTORY — all graphs, for deep-dives
