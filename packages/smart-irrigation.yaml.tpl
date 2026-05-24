@@ -1718,7 +1718,7 @@ automation:
             target:
               entity_id: ${ZONE1_SWITCH}
           - delay:
-              minutes: "{{ (states('sensor.zone_1_recommended_duration') | int(5) * 0.5) | int | max(3) }}"
+              minutes: "{{ [ (states('sensor.zone_1_recommended_duration') | int(5) * 0.5) | int, 3 ] | max }}"
           - service: switch.turn_off
             target:
               entity_id: ${ZONE1_SWITCH}
@@ -1736,7 +1736,7 @@ automation:
             target:
               entity_id: ${ZONE4_SWITCH}
           - delay:
-              minutes: "{{ (states('sensor.zone_4_recommended_duration') | int(5) * 0.5) | int | max(3) }}"
+              minutes: "{{ [ (states('sensor.zone_4_recommended_duration') | int(5) * 0.5) | int, 3 ] | max }}"
           - service: switch.turn_off
             target:
               entity_id: ${ZONE4_SWITCH}
