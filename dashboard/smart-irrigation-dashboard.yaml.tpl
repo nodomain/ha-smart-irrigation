@@ -254,18 +254,14 @@ views:
           - type: entities
             title: "Zuletzt gegossen"
             entities:
-              - entity: input_datetime.irrigation_zone_1_last_run
+              - entity: sensor.zone_1_last_watering_display
                 name: "${ZONE1_NAME}"
-                icon: mdi:sprinkler
-              - entity: input_datetime.irrigation_zone_2_last_run
+              - entity: sensor.zone_2_last_watering_display
                 name: "${ZONE2_NAME}"
-                icon: mdi:sprinkler
-              - entity: input_datetime.irrigation_zone_3_last_run
+              - entity: sensor.zone_3_last_watering_display
                 name: "${ZONE3_NAME}"
-                icon: mdi:sprinkler
-              - entity: input_datetime.irrigation_zone_4_last_run
+              - entity: sensor.zone_4_last_watering_display
                 name: "${ZONE4_NAME}"
-                icon: mdi:sprinkler
 
   # ===========================================================================
   # VIEW 3: SETTINGS — tuning parameters

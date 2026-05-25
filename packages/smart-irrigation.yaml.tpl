@@ -868,6 +868,81 @@ template:
           {% endif %}
 
       # -----------------------------------------------------------------------
+      # Last watering display (human-readable, formatted)
+      # -----------------------------------------------------------------------
+      - name: "Zone 1 last watering display"
+        unique_id: irrigation_zone_1_last_watering_display
+        icon: mdi:clock-check
+        state: >-
+          {% set dt_str = states('input_datetime.irrigation_zone_1_last_run') %}
+          {% if dt_str in ['unknown', 'unavailable'] %}
+            Noch nie
+          {% else %}
+            {% set d = strptime(dt_str, '%Y-%m-%d %H:%M:%S') %}
+            {% if d.date() == now().date() %}
+              Heute, {{ d.strftime('%H:%M') }} Uhr
+            {% elif d.date() == (now().date() - timedelta(days=1)) %}
+              Gestern, {{ d.strftime('%H:%M') }} Uhr
+            {% else %}
+              {{ d.strftime('%d.%m.') }}, {{ d.strftime('%H:%M') }} Uhr
+            {% endif %}
+          {% endif %}
+
+      - name: "Zone 2 last watering display"
+        unique_id: irrigation_zone_2_last_watering_display
+        icon: mdi:clock-check
+        state: >-
+          {% set dt_str = states('input_datetime.irrigation_zone_2_last_run') %}
+          {% if dt_str in ['unknown', 'unavailable'] %}
+            Noch nie
+          {% else %}
+            {% set d = strptime(dt_str, '%Y-%m-%d %H:%M:%S') %}
+            {% if d.date() == now().date() %}
+              Heute, {{ d.strftime('%H:%M') }} Uhr
+            {% elif d.date() == (now().date() - timedelta(days=1)) %}
+              Gestern, {{ d.strftime('%H:%M') }} Uhr
+            {% else %}
+              {{ d.strftime('%d.%m.') }}, {{ d.strftime('%H:%M') }} Uhr
+            {% endif %}
+          {% endif %}
+
+      - name: "Zone 3 last watering display"
+        unique_id: irrigation_zone_3_last_watering_display
+        icon: mdi:clock-check
+        state: >-
+          {% set dt_str = states('input_datetime.irrigation_zone_3_last_run') %}
+          {% if dt_str in ['unknown', 'unavailable'] %}
+            Noch nie
+          {% else %}
+            {% set d = strptime(dt_str, '%Y-%m-%d %H:%M:%S') %}
+            {% if d.date() == now().date() %}
+              Heute, {{ d.strftime('%H:%M') }} Uhr
+            {% elif d.date() == (now().date() - timedelta(days=1)) %}
+              Gestern, {{ d.strftime('%H:%M') }} Uhr
+            {% else %}
+              {{ d.strftime('%d.%m.') }}, {{ d.strftime('%H:%M') }} Uhr
+            {% endif %}
+          {% endif %}
+
+      - name: "Zone 4 last watering display"
+        unique_id: irrigation_zone_4_last_watering_display
+        icon: mdi:clock-check
+        state: >-
+          {% set dt_str = states('input_datetime.irrigation_zone_4_last_run') %}
+          {% if dt_str in ['unknown', 'unavailable'] %}
+            Noch nie
+          {% else %}
+            {% set d = strptime(dt_str, '%Y-%m-%d %H:%M:%S') %}
+            {% if d.date() == now().date() %}
+              Heute, {{ d.strftime('%H:%M') }} Uhr
+            {% elif d.date() == (now().date() - timedelta(days=1)) %}
+              Gestern, {{ d.strftime('%H:%M') }} Uhr
+            {% else %}
+              {{ d.strftime('%d.%m.') }}, {{ d.strftime('%H:%M') }} Uhr
+            {% endif %}
+          {% endif %}
+
+      # -----------------------------------------------------------------------
       # Rain skip reason (human-readable text)
       # -----------------------------------------------------------------------
       - name: "Irrigation skip reason"
