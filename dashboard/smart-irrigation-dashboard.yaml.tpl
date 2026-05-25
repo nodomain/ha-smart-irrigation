@@ -228,7 +228,8 @@ views:
       - title: "Ventile"
         cards:
           - type: history-graph
-            hours_to_show: 168
+            title: "Letzte 48 Stunden"
+            hours_to_show: 48
             entities:
               - entity: ${ZONE1_SWITCH}
                 name: "${ZONE1_NAME}"
@@ -238,6 +239,33 @@ views:
                 name: "${ZONE3_NAME}"
               - entity: ${ZONE4_SWITCH}
                 name: "${ZONE4_NAME}"
+          - type: history-graph
+            title: "Letzte 24 Stunden"
+            hours_to_show: 24
+            entities:
+              - entity: ${ZONE1_SWITCH}
+                name: "${ZONE1_NAME}"
+              - entity: ${ZONE2_SWITCH}
+                name: "${ZONE2_NAME}"
+              - entity: ${ZONE3_SWITCH}
+                name: "${ZONE3_NAME}"
+              - entity: ${ZONE4_SWITCH}
+                name: "${ZONE4_NAME}"
+          - type: entities
+            title: "Zuletzt gegossen"
+            entities:
+              - entity: input_datetime.irrigation_zone_1_last_run
+                name: "${ZONE1_NAME}"
+                icon: mdi:sprinkler
+              - entity: input_datetime.irrigation_zone_2_last_run
+                name: "${ZONE2_NAME}"
+                icon: mdi:sprinkler
+              - entity: input_datetime.irrigation_zone_3_last_run
+                name: "${ZONE3_NAME}"
+                icon: mdi:sprinkler
+              - entity: input_datetime.irrigation_zone_4_last_run
+                name: "${ZONE4_NAME}"
+                icon: mdi:sprinkler
 
   # ===========================================================================
   # VIEW 3: SETTINGS — tuning parameters
